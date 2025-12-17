@@ -160,9 +160,10 @@ NAS 파일 858개
 | Column | Type | Description |
 |--------|------|-------------|
 | id | INTEGER PK | 자동 증가 |
+| **file_id** | VARCHAR(100) | **고유 식별자 (파일명 기반)** |
 | entry_id | INTEGER FK | CategoryEntry 참조 (nullable) |
-| file_path | VARCHAR(500) | 전체 경로 |
-| filename | VARCHAR(300) | 파일명 |
+| file_path | VARCHAR(500) | 전체 경로 (변경 가능) |
+| filename | VARCHAR(300) | 파일명 **(불변, 식별 키)** |
 | drive | VARCHAR(10) | 드라이브 (`X:`, `Y:`, `Z:`) |
 | folder | VARCHAR(20) | 폴더 유형 (`pokergo`, `origin`, `archive`) |
 | file_size | BIGINT | 파일 크기 (bytes) |
@@ -174,8 +175,75 @@ NAS 파일 858개
 | extracted_year | INTEGER | 패턴 추출 연도 |
 | extracted_event | VARCHAR(20) | 패턴 추출 이벤트 |
 | extracted_sequence | INTEGER | 패턴 추출 순서 |
+| **path_history** | TEXT | 경로 변경 이력 (JSON) |
+| **last_seen_at** | DATETIME | 마지막 스캔 시 발견 |
 | created_at | DATETIME | 생성일 |
 | updated_at | DATETIME | 수정일 |
+
+#### 파일 식별 전략
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    파일 경로 변경 대응 전략                       │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  [핵심 원칙]                                                    │
+│  ├─ 파일명 = 불변 (고유 식별자)                                 │
+│  └─ 파일 경로 = 가변 (업데이트 가능)                            │
+│                                                                 │
+│  [file_id 생성 규칙]                                            │
+│  └─ file_id = filename (확장자 포함)                            │
+│     예: "wsop_2024_me_day1.mp4"                                 │
+│                                                                 │
+│  [경로 변경 감지]                                               │
+│  스캔 시:                                                       │
+│  ├─ 기존 file_id 발견 + 새 경로 → 경로 업데이트                 │
+│  ├─ 새 file_id → 신규 파일 등록                                 │
+│  └─ 기존 file_id 미발견 → 파일 이동/삭제 플래그                 │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**file_id 생성:**
+```python
+def generate_file_id(filename: str) -> str:
+    """파일명 기반 고유 식별자 생성"""
+    # 파일명 자체가 식별자 (대소문자 정규화)
+    return filename.lower().strip()
+```
+
+**경로 변경 처리:**
+```python
+def handle_path_change(file_id: str, new_path: str, db: Session):
+    """파일 경로 변경 시 처리"""
+    existing = db.query(NasFile).filter(NasFile.file_id == file_id).first()
+
+    if existing and existing.file_path != new_path:
+        # 경로 이력 저장
+        history = json.loads(existing.path_history or "[]")
+        history.append({
+            "old_path": existing.file_path,
+            "new_path": new_path,
+            "changed_at": datetime.now().isoformat()
+        })
+
+        # 경로 업데이트
+        existing.file_path = new_path
+        existing.path_history = json.dumps(history)
+        existing.updated_at = datetime.now()
+
+        # 카테고리 매칭 유지 (entry_id 변경 없음)
+```
+
+**경로 변경 시 유지되는 것:**
+| 항목 | 유지 여부 |
+|------|----------|
+| file_id | ✅ 유지 |
+| entry_id (카테고리 연결) | ✅ 유지 |
+| display_title | ✅ 유지 |
+| 매칭 정보 (match_type) | ✅ 유지 |
+| file_path | ❌ 업데이트 |
+| drive/folder | ❌ 업데이트 |
 
 ---
 
