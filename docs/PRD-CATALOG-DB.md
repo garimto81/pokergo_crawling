@@ -1,46 +1,53 @@
-# PRD: NAS 중심 카탈로그 DB 설계
+# PRD: NAS 중심 카테고리 DB 설계
 
-> NAS 파일 기반 WSOP 콘텐츠 카탈로그 시스템
+> NAS 파일 기반 WSOP 콘텐츠 카테고리 시스템 (하이브리드 접근)
 
-**Version**: 1.0 | **Date**: 2025-12-17
+**Version**: 2.0 | **Date**: 2025-12-17
 
 ---
 
 ## 1. 배경 및 문제 정의
 
-### 1.1 기존 접근 방식의 한계
+### 1.1 현재 상황 (복잡함)
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    데이터 성격 불일치                            │
+│                    데이터 관계: 부분 매칭                         │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│  [PokerGO 828개]              [NAS 1,405개]                     │
-│  ├─ 편집된 에피소드            ├─ 생방송 스트리밍 원본           │
-│  ├─ 30-60분 단위              ├─ 수시간 Raw footage            │
-│  ├─ 제목/설명 완비             ├─ 파일명만 존재                 │
-│  └─ 방송용 최종본              └─ 소스 영상                     │
+│  [PokerGO 828개]              [NAS 858개 Active]                │
+│  ├─ 완성된 카테고리            ├─ 일부: PokerGO와 매칭 가능      │
+│  ├─ 완성된 제목                └─ 일부: PokerGO와 매칭 불가      │
+│  └─ 편집된 에피소드                                              │
 │                                                                 │
-│              1:1 매칭 본질적 불가능                              │
+│  핵심 인사이트:                                                  │
+│  ├─ 전부 매칭되는 것도 아님                                      │
+│  ├─ 전부 매칭 안 되는 것도 아님                                  │
+│  └─ 개별 검사 + 매칭 작업 필요                                   │
+│                                                                 │
+│  PokerGO의 가치:                                                 │
+│  └─ 카테고리와 제목이 가장 완성도 높음 → 최대한 활용             │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-**기존 문제점:**
-- PokerGO 에피소드와 NAS 생방송 원본은 성격이 다름
-- 1:1 매칭률을 KPI로 삼는 것 자체가 부적절
-- 어떤 단일 DB도 완전하지 않음
-
-### 1.2 새로운 접근: NAS 중심 카탈로그
+### 1.2 하이브리드 접근
 
 ```
-[NAS 파일] → [패턴 추출] → [자체 카탈로그 생성] → [PokerGO는 참조용]
+NAS 파일 858개
+    │
+    ├─[매칭 가능]──▶ PokerGO 카테고리/제목 활용
+    │                 (완성된 메타데이터)
+    │
+    └─[매칭 불가]──▶ 자체 카테고리/제목 생성
+                      (패턴 기반 자동 생성)
 ```
 
 **핵심 원칙:**
-1. NAS 파일이 실제 보유 자산 → 이를 기준으로 카탈로그 구축
-2. PokerGO 메타데이터는 참조 정보로만 활용
-3. 자동 생성 + 수동 검증 하이브리드 워크플로우
+1. PokerGO 매칭 가능 → PokerGO 카테고리/제목 우선 사용
+2. PokerGO 매칭 불가 → 자체 카테고리/제목 생성
+3. 개별 파일 검사를 통한 정확한 매칭
+4. 수동 검증 워크플로우
 
 ---
 
@@ -50,24 +57,21 @@
 
 ```
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│    Category     │     │  CatalogEntry   │     │    NasFile      │
+│    Category     │     │  CategoryEntry  │     │    NasFile      │
 ├─────────────────┤     ├─────────────────┤     ├─────────────────┤
 │ id (PK)         │     │ id (PK)         │     │ id (PK)         │
-│ code            │◄────│ category_id(FK) │     │ catalog_id (FK)─│───┐
+│ code            │◄────│ category_id(FK) │     │ entry_id (FK)───│───┐
 │ name            │     │ display_title   │◄────│ file_path       │   │
 │ year            │     │ year            │     │ filename        │   │
-│ description     │     │ event_type      │     │ drive           │   │
-└─────────────────┘     │ sequence        │     │ file_size       │   │
-                        │ source          │     │ duration        │   │
-┌─────────────────┐     │ verified        │     │ is_excluded     │   │
-│  PokerGoRef     │     │ notes           │     │ role            │   │
-├─────────────────┤     └─────────────────┘     └─────────────────┘   │
-│ id (PK)         │            ▲                                      │
-│ catalog_id (FK)─│────────────┘                                      │
-│ pokergo_ep_id   │                                                   │
-│ pokergo_title   │     ┌─────────────────────────────────────────────┘
-│ relation_type   │     │ 1:N 관계 (하나의 카탈로그에 여러 NAS 파일)
-└─────────────────┘     └─────────────────────────────────────────────
+│ region          │     │ event_type      │     │ drive           │   │
+│ source          │     │ sequence        │     │ file_size       │   │
+└─────────────────┘     │ source          │     │ is_excluded     │   │
+                        │ pokergo_ep_id   │     │ role            │   │
+                        │ verified        │     └─────────────────┘   │
+                        └─────────────────┘                           │
+                               ▲                                      │
+                               └──────────────────────────────────────┘
+                                    1:N (하나의 Entry에 여러 NAS 파일)
 ```
 
 ### 2.2 테이블 정의
@@ -83,20 +87,27 @@
 | name | VARCHAR(200) | 표시명 (예: `WSOP 2022`) |
 | year | INTEGER | 연도 |
 | region | VARCHAR(20) | 지역 (LV, EU, APAC, PARADISE, ...) |
+| source | VARCHAR(20) | 출처 (`POKERGO`, `NAS_ONLY`, `HYBRID`) |
+| pokergo_category | VARCHAR(100) | PokerGO 원본 카테고리명 (있으면) |
 | description | TEXT | 설명 |
 | created_at | DATETIME | 생성일 |
 
+**source 정의:**
+- `POKERGO`: PokerGO에서 가져온 카테고리
+- `NAS_ONLY`: NAS 파일에서 자체 생성
+- `HYBRID`: 둘 다 혼합
+
 **예시 데이터:**
 ```
-| code         | name              | year | region   |
-|--------------|-------------------|------|----------|
-| WSOP_2022    | WSOP 2022         | 2022 | LV       |
-| WSOP_2022_EU | WSOP Europe 2022  | 2022 | EU       |
-| WSOP_1995    | WSOP Classic 1995 | 1995 | LV       |
-| WSOP_PARADISE_2024 | WSOP Paradise 2024 | 2024 | PARADISE |
+| code         | name              | year | region   | source   |
+|--------------|-------------------|------|----------|----------|
+| WSOP_2022    | WSOP 2022         | 2022 | LV       | POKERGO  |
+| WSOP_2022_EU | WSOP Europe 2022  | 2022 | EU       | POKERGO  |
+| WSOP_1995    | WSOP Classic 1995 | 1995 | LV       | POKERGO  |
+| WSOP_PARADISE_2024 | WSOP Paradise 2024 | 2024 | PARADISE | NAS_ONLY |
 ```
 
-#### CatalogEntry (카탈로그 항목)
+#### CategoryEntry (카테고리 항목)
 
 개별 콘텐츠 단위. NAS 파일 그룹의 논리적 단위.
 
@@ -111,7 +122,10 @@
 | event_name | VARCHAR(200) | 이벤트명 (예: `Main Event`) |
 | sequence | INTEGER | 순서 (Day/Episode/Part 번호) |
 | sequence_type | VARCHAR(20) | 순서 유형 (`DAY`, `EPISODE`, `PART`) |
-| source | VARCHAR(20) | 생성 방식 (`AUTO`, `MANUAL`, `HYBRID`) |
+| source | VARCHAR(20) | 출처 (`POKERGO`, `NAS_ONLY`) |
+| pokergo_ep_id | VARCHAR(50) | PokerGO 에피소드 ID (있으면) |
+| pokergo_title | VARCHAR(300) | PokerGO 원본 제목 (있으면) |
+| match_type | VARCHAR(20) | 매칭 유형 (`EXACT`, `PARTIAL`, `MANUAL`, `NONE`) |
 | verified | BOOLEAN | 검증 완료 여부 |
 | verified_at | DATETIME | 검증 일시 |
 | verified_by | VARCHAR(100) | 검증자 |
@@ -119,14 +133,24 @@
 | created_at | DATETIME | 생성일 |
 | updated_at | DATETIME | 수정일 |
 
+**source 정의:**
+- `POKERGO`: PokerGO 매칭 성공 → PokerGO 제목 사용
+- `NAS_ONLY`: PokerGO 매칭 실패 → 자체 제목 생성
+
+**match_type 정의:**
+- `EXACT`: PokerGO와 정확히 1:1 매칭
+- `PARTIAL`: PokerGO와 부분 매칭 (1:N 또는 N:1)
+- `MANUAL`: 수동으로 매칭/지정
+- `NONE`: 매칭 없음 (자체 생성)
+
 **예시 데이터:**
 ```
-| entry_code      | display_title                    | event_type | sequence | verified |
-|-----------------|----------------------------------|------------|----------|----------|
-| WSOP_2022_ME_D1 | WSOP 2022 Main Event Day 1       | ME         | 1        | true     |
-| WSOP_2022_ME_D2 | WSOP 2022 Main Event Day 2       | ME         | 2        | true     |
-| WSOP_2022_BR_01 | WSOP 2022 Bracelet Event #1      | BR         | 1        | false    |
-| WSOP_1995_ME    | WSOP Classic 1995 Main Event     | ME         | NULL     | true     |
+| entry_code      | display_title                    | source   | match_type | pokergo_ep_id |
+|-----------------|----------------------------------|----------|------------|---------------|
+| WSOP_2022_ME_D1 | 2022 WSOP Main Event Day 1       | POKERGO  | EXACT      | ep_12345      |
+| WSOP_2022_ME_D2 | 2022 WSOP Main Event Day 2       | POKERGO  | PARTIAL    | ep_12346      |
+| WSOP_2024_PAR_01| WSOP Paradise 2024 Day 1         | NAS_ONLY | NONE       | NULL          |
+| WSOP_1995_ME    | WSOP Classic 1995 - Dan Harrington| POKERGO | EXACT      | ep_00123      |
 ```
 
 #### NasFile (NAS 파일)
@@ -136,7 +160,7 @@
 | Column | Type | Description |
 |--------|------|-------------|
 | id | INTEGER PK | 자동 증가 |
-| catalog_id | INTEGER FK | CatalogEntry 참조 (nullable) |
+| entry_id | INTEGER FK | CategoryEntry 참조 (nullable) |
 | file_path | VARCHAR(500) | 전체 경로 |
 | filename | VARCHAR(300) | 파일명 |
 | drive | VARCHAR(10) | 드라이브 (`X:`, `Y:`, `Z:`) |
@@ -153,51 +177,93 @@
 | created_at | DATETIME | 생성일 |
 | updated_at | DATETIME | 수정일 |
 
-**역할(role) 정의:**
-- `PRIMARY`: 주 파일 (Z: Archive 또는 최고 품질)
-- `BACKUP`: 백업 파일 (Y: Origin)
-- `SOURCE`: PokerGO 소스 (X:)
-
-#### PokerGoRef (PokerGO 참조)
-
-PokerGO 메타데이터 참조 정보. 1:N 관계로 하나의 카탈로그에 여러 에피소드 연결 가능.
-
-| Column | Type | Description |
-|--------|------|-------------|
-| id | INTEGER PK | 자동 증가 |
-| catalog_id | INTEGER FK | CatalogEntry 참조 |
-| pokergo_ep_id | VARCHAR(50) | PokerGO 에피소드 ID |
-| pokergo_title | VARCHAR(300) | PokerGO 제목 |
-| pokergo_description | TEXT | PokerGO 설명 |
-| relation_type | VARCHAR(20) | 관계 유형 (`EXACT`, `PARTIAL`, `RELATED`) |
-| notes | TEXT | 메모 |
-
-**관계 유형(relation_type):**
-- `EXACT`: 정확히 일치 (드묾)
-- `PARTIAL`: 부분 일치 (NAS 1개 = PokerGO 여러 개)
-- `RELATED`: 관련 콘텐츠
-
 ---
 
-## 3. 카탈로그 생성 로직
+## 3. 매칭 워크플로우
 
-### 3.1 자동 생성 파이프라인
+### 3.1 전체 흐름
 
 ```
 ┌──────────────┐    ┌──────────────┐    ┌──────────────┐    ┌──────────────┐
-│  NAS 스캔    │───▶│  패턴 추출   │───▶│ 카탈로그 생성│───▶│  제목 생성   │
+│  NAS 스캔    │───▶│  패턴 추출   │───▶│ PokerGO 매칭 │───▶│  검증 대기   │
 └──────────────┘    └──────────────┘    └──────────────┘    └──────────────┘
-       │                   │                   │                   │
-       ▼                   ▼                   ▼                   ▼
-   파일 목록           Year/Event/         CatalogEntry        Display Title
-   수집                Sequence 추출        레코드 생성         자동 생성
+                                               │
+                          ┌────────────────────┼────────────────────┐
+                          │                    │                    │
+                          ▼                    ▼                    ▼
+                    ┌──────────┐         ┌──────────┐         ┌──────────┐
+                    │ EXACT    │         │ PARTIAL  │         │ NONE     │
+                    │ 매칭     │         │ 매칭     │         │ 자체생성  │
+                    └──────────┘         └──────────┘         └──────────┘
+                          │                    │                    │
+                          ▼                    ▼                    ▼
+                    PokerGO 제목          PokerGO 제목         자체 제목
+                    그대로 사용           + 수동 확인          자동 생성
 ```
 
-### 3.2 제목 생성 규칙
+### 3.2 매칭 판정 로직
 
 ```python
-def generate_display_title(entry: CatalogEntry) -> str:
-    """카탈로그 표시 제목 생성"""
+def determine_match_type(nas_file: NasFile, pokergo_episodes: List) -> MatchResult:
+    """NAS 파일과 PokerGO 에피소드 매칭 판정"""
+
+    # 1. 정확한 매칭 시도
+    exact_matches = find_exact_matches(nas_file, pokergo_episodes)
+    if len(exact_matches) == 1:
+        return MatchResult(
+            type='EXACT',
+            pokergo_ep=exact_matches[0],
+            title=exact_matches[0].title,
+            source='POKERGO'
+        )
+
+    # 2. 부분 매칭 시도
+    partial_matches = find_partial_matches(nas_file, pokergo_episodes)
+    if partial_matches:
+        return MatchResult(
+            type='PARTIAL',
+            pokergo_ep=partial_matches[0],  # 가장 유사한 것
+            title=partial_matches[0].title,
+            source='POKERGO',
+            requires_verification=True
+        )
+
+    # 3. 매칭 실패 → 자체 생성
+    return MatchResult(
+        type='NONE',
+        pokergo_ep=None,
+        title=generate_title(nas_file),
+        source='NAS_ONLY'
+    )
+```
+
+### 3.3 제목 결정 우선순위
+
+| 우선순위 | 조건 | 제목 출처 |
+|----------|------|----------|
+| 1 | EXACT 매칭 | PokerGO 제목 그대로 |
+| 2 | PARTIAL 매칭 | PokerGO 제목 (검증 필요) |
+| 3 | MANUAL 지정 | 수동 입력 제목 |
+| 4 | NONE | 자동 생성 제목 |
+
+---
+
+## 4. 제목 생성 규칙
+
+### 4.1 PokerGO 제목 사용 (EXACT/PARTIAL)
+
+```python
+# PokerGO 매칭 시 → PokerGO 제목 그대로 사용
+entry.display_title = pokergo_episode.title
+entry.source = 'POKERGO'
+entry.pokergo_title = pokergo_episode.title
+```
+
+### 4.2 자체 제목 생성 (NONE)
+
+```python
+def generate_display_title(entry: CategoryEntry) -> str:
+    """자체 카테고리/제목 생성 (PokerGO 매칭 실패 시)"""
 
     # Era별 처리
     if entry.year <= 2002:  # CLASSIC Era
@@ -232,40 +298,22 @@ def generate_display_title(entry: CatalogEntry) -> str:
     # Sequence 처리
     seq_suffix = ""
     if entry.sequence:
-        seq_type = entry.sequence_type or 'DAY'
-        seq_suffix = f" {seq_type.title()} {entry.sequence}"
+        seq_type = entry.sequence_type or 'Day'
+        seq_suffix = f" {seq_type} {entry.sequence}"
 
     return f"{prefix} {entry.year} {event}{seq_suffix}".strip()
 ```
 
-### 3.3 그룹화 규칙
-
-동일 콘텐츠 파일을 하나의 CatalogEntry로 그룹화:
-
-```python
-def create_catalog_key(nas_file: NasFile) -> str:
-    """NAS 파일에서 카탈로그 키 생성"""
-    year = nas_file.extracted_year
-    event = nas_file.extracted_event or 'ME'
-    seq = nas_file.extracted_sequence or 0
-    region = detect_region(nas_file.file_path)
-
-    return f"{region}_{year}_{event}_{seq:02d}"
-
-# 동일 키를 가진 파일들 → 하나의 CatalogEntry
-# 예: WSOP_2022_ME_01 키를 가진 파일 3개 → 1개 CatalogEntry에 3개 NasFile
-```
-
 ---
 
-## 4. 상태 관리
+## 5. 상태 관리
 
-### 4.1 검증 워크플로우
+### 5.1 검증 워크플로우
 
 ```
 ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
-│   AUTO      │───▶│  REVIEW     │───▶│  VERIFIED   │
-│  (자동생성)  │    │  (검토대기)  │    │  (검증완료)  │
+│ UNVERIFIED  │───▶│  REVIEWING  │───▶│  VERIFIED   │
+│ (자동생성)   │    │  (검토중)   │    │  (검증완료)  │
 └─────────────┘    └─────────────┘    └─────────────┘
        │                                     │
        │         ┌─────────────┐             │
@@ -274,143 +322,86 @@ def create_catalog_key(nas_file: NasFile) -> str:
                  └─────────────┘
 ```
 
-### 4.2 완성도 지표
+### 5.2 검증 우선순위
 
-| 지표 | 정의 | 목표 |
-|------|------|------|
-| **카탈로그 커버리지** | CatalogEntry 연결된 NasFile / 전체 Active NasFile | 95%+ |
-| **제목 완성도** | display_title 있는 Entry / 전체 Entry | 100% |
-| **검증 완료율** | verified=true Entry / 전체 Entry | 80%+ |
-| **PokerGO 참조율** | PokerGoRef 있는 Entry / 전체 Entry | 50%+ (참고) |
+| 우선순위 | 대상 | 이유 |
+|----------|------|------|
+| 1 | PARTIAL 매칭 | 자동 매칭 불확실 |
+| 2 | NONE (자체 생성) | 제목 정확성 확인 |
+| 3 | EXACT 매칭 | 스팟 체크 |
 
 ---
 
-## 5. API 엔드포인트
+## 6. 완성도 지표
 
-### 5.1 카탈로그 관리
+### 6.1 KPI 정의
+
+| 지표 | 정의 | 목표 |
+|------|------|------|
+| **카테고리 커버리지** | Entry 연결된 NasFile / Active NasFile | 95%+ |
+| **제목 완성도** | display_title 있는 Entry / 전체 Entry | 100% |
+| **PokerGO 활용률** | source='POKERGO' Entry / 전체 Entry | 60%+ |
+| **검증 완료율** | verified=true Entry / 전체 Entry | 80%+ |
+
+### 6.2 매칭 분포 목표
+
+| 매칭 유형 | 예상 비율 | 비고 |
+|----------|----------|------|
+| EXACT | 40% | PokerGO 완전 매칭 |
+| PARTIAL | 15% | 수동 확인 필요 |
+| MANUAL | 5% | 수동 지정 |
+| NONE | 40% | 자체 생성 (Paradise, Cyprus 등) |
+
+---
+
+## 7. API 엔드포인트
+
+### 7.1 카테고리 관리
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/categories` | 카테고리 목록 |
 | GET | `/api/categories/{id}/entries` | 카테고리별 항목 |
-| GET | `/api/entries` | 카탈로그 항목 목록 |
+| GET | `/api/entries` | 항목 목록 (필터: source, match_type, verified) |
 | GET | `/api/entries/{id}` | 항목 상세 (파일 포함) |
-| PATCH | `/api/entries/{id}` | 항목 수정 (제목, 검증 등) |
+| PATCH | `/api/entries/{id}` | 항목 수정 (제목, 매칭 등) |
 | POST | `/api/entries/{id}/verify` | 검증 완료 처리 |
-| POST | `/api/entries/generate` | 자동 카탈로그 생성 |
 
-### 5.2 파일 관리
+### 7.2 매칭 작업
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/files` | NAS 파일 목록 |
-| GET | `/api/files/unassigned` | 미할당 파일 |
-| PATCH | `/api/files/{id}/assign` | 카탈로그 할당 |
+| POST | `/api/matching/run` | 자동 매칭 실행 |
+| GET | `/api/matching/candidates/{file_id}` | 매칭 후보 조회 |
+| POST | `/api/matching/manual` | 수동 매칭 지정 |
 
-### 5.3 통계
+### 7.3 통계
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/stats/overview` | 전체 통계 |
-| GET | `/api/stats/coverage` | 커버리지 통계 |
+| GET | `/api/stats/matching` | 매칭 유형별 통계 |
 | GET | `/api/stats/by-year` | 연도별 통계 |
-
----
-
-## 6. UI 요구사항
-
-### 6.1 대시보드
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        NAMS 대시보드                             │
-├─────────────────────────────────────────────────────────────────┤
-│  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐            │
-│  │ 카탈로그 │  │  검증   │  │  파일   │  │ 미할당  │            │
-│  │   826   │  │  320    │  │  1,405  │  │   45    │            │
-│  │ entries │  │ verified│  │  files  │  │  files  │            │
-│  └─────────┘  └─────────┘  └─────────┘  └─────────┘            │
-│                                                                 │
-│  [연도별 분포 차트]                  [검증 상태 파이차트]        │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-### 6.2 카탈로그 목록
-
-- 필터: 연도, Region, Event Type, 검증 상태
-- 정렬: 연도, 제목, 생성일
-- 인라인 편집: 제목, 메모
-- 일괄 검증 기능
-
-### 6.3 카탈로그 상세
-
-- 기본 정보 (제목, 연도, 이벤트)
-- 연결된 NAS 파일 목록
-- PokerGO 참조 정보
-- 수정 이력
-
----
-
-## 7. 마이그레이션 계획
-
-### 7.1 기존 데이터 마이그레이션
-
-```python
-# Phase 1: Category 생성
-# 기존 AssetGroup의 year/region 조합으로 Category 생성
-
-# Phase 2: CatalogEntry 생성
-# 기존 AssetGroup → CatalogEntry 변환
-# group_id → entry_code
-# pokergo_title → display_title (있으면)
-# 없으면 자동 생성
-
-# Phase 3: NasFile 연결
-# 기존 nas_files → catalog_id 설정
-# group_id 기반으로 매핑
-
-# Phase 4: PokerGoRef 생성
-# 기존 pokergo_episode_id → PokerGoRef 레코드
-```
-
-### 7.2 스키마 변경
-
-```sql
--- 새 테이블 생성
-CREATE TABLE categories (...);
-CREATE TABLE catalog_entries (...);
-CREATE TABLE pokergo_refs (...);
-
--- nas_files 테이블 수정
-ALTER TABLE nas_files ADD COLUMN catalog_id INTEGER REFERENCES catalog_entries(id);
-
--- 기존 테이블 백업 후 삭제 (마이그레이션 완료 후)
--- asset_groups, file_groups 등
-```
 
 ---
 
 ## 8. 성공 지표
 
-### 기존 vs 신규 KPI
-
-| 기존 KPI | 신규 KPI |
-|----------|----------|
-| PokerGO 매칭률 53% | **카탈로그 커버리지** 95%+ |
-| MATCHED/NAS_ONLY | **VERIFIED/UNVERIFIED** |
-| 패턴 추출률 97.6% | **제목 완성도** 100% |
-| - | **검증 완료율** 80%+ |
-
 ### 최종 목표
 
 | 지표 | 목표 |
 |------|------|
-| 카탈로그 항목 수 | 800+ entries |
-| 카탈로그 커버리지 | 95%+ (NAS 파일) |
+| 카테고리 항목 수 | 800+ entries |
+| 카테고리 커버리지 | 95%+ |
 | 제목 완성도 | 100% |
+| PokerGO 활용률 | 60%+ |
 | 검증 완료율 | 80%+ |
-| PokerGO 참조율 | 50%+ (보조 지표) |
+
+### 핵심 원칙
+
+1. **PokerGO 우선**: 매칭 가능하면 PokerGO 카테고리/제목 사용
+2. **자체 생성 보완**: 매칭 불가 시 자체 카테고리/제목 생성
+3. **개별 검증**: 모든 매칭 결과를 수동 검증
 
 ---
 
@@ -418,4 +409,5 @@ ALTER TABLE nas_files ADD COLUMN catalog_id INTEGER REFERENCES catalog_entries(i
 
 | Version | Date | Changes |
 |---------|------|---------|
-| 1.0 | 2025-12-17 | 초기 설계 - NAS 중심 카탈로그 모델 |
+| 2.0 | 2025-12-17 | 하이브리드 접근 반영, 카탈로그→카테고리 용어 변경 |
+| 1.0 | 2025-12-17 | 초기 설계 - NAS 중심 모델 |
