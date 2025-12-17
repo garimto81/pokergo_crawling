@@ -151,16 +151,43 @@ python scripts/migrate_to_category.py
 python scripts/run_hybrid_matching.py
 ```
 
-### Phase 3: 제목 생성 엔진 (Week 3)
+### Phase 3: AI 추론 기반 제목 생성 (Week 3)
 
-**목표**: 모든 Entry에 display_title
+**목표**: 모든 Entry에 display_title (AI 활용)
 
 | Task | 설명 |
 |------|------|
-| PokerGO 제목 복사 | EXACT/PARTIAL → PokerGO 제목 |
-| 자체 제목 생성 | NONE → 패턴 기반 생성 |
-| Era별 규칙 | CLASSIC (1973-2002) 특수 처리 |
-| Region별 접두사 | WSOP, WSOP Europe, WSOP Paradise 등 |
+| PokerGO 제목 복사 | EXACT/PARTIAL → PokerGO 제목 그대로 |
+| **AI 추론 제목 생성** | NONE → AI가 카테고리/제목 추론 |
+| PokerGO 컨텍스트 제공 | 828개 메타데이터를 참조 정보로 활용 |
+| Fallback 처리 | AI 실패 시 패턴 기반 대체 |
+
+#### AI 추론 방식
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                    AI 추론 컨텍스트                           │
+├──────────────────────────────────────────────────────────────┤
+│                                                              │
+│  Input:                                                      │
+│  ├─ NAS 파일명: "MPP_Cyprus_2025_Day3_FT.mp4"               │
+│  ├─ NAS 경로: "Z:\WSOP\Cyprus\2025\"                        │
+│  └─ PokerGO 참조: 828개 에피소드 메타데이터 (컨텍스트)       │
+│                                                              │
+│  Output:                                                     │
+│  ├─ 카테고리: "WSOP Cyprus 2025"                            │
+│  └─ 제목: "WSOP Cyprus 2025 Day 3 Final Table"              │
+│                                                              │
+└──────────────────────────────────────────────────────────────┘
+```
+
+#### 비용 최적화
+
+| 전략 | 설명 |
+|------|------|
+| Batch 처리 | 여러 파일 한 번에 |
+| 캐싱 | 동일 패턴 재사용 |
+| **Gemini Flash** | 저비용 추론 (Google AI) |
 
 ### Phase 4: UI 및 검증 워크플로우 (Week 4)
 

@@ -259,49 +259,155 @@ entry.source = 'POKERGO'
 entry.pokergo_title = pokergo_episode.title
 ```
 
-### 4.2 자체 제목 생성 (NONE)
+### 4.2 AI 추론 기반 제목 생성 (NONE)
+
+PokerGO 매칭 실패 시, **AI(LLM)를 활용**하여 파일명/경로에서 의미를 추론하여 제목 생성.
+
+#### 왜 AI 추론인가?
+
+| 방식 | 장점 | 단점 |
+|------|------|------|
+| **패턴 기반** | 빠름, 일관성 | 비표준 파일명 처리 불가 |
+| **AI 추론** | 유연함, 맥락 이해 | API 비용, 속도 |
+
+```
+패턴 기반 한계 예시:
+  "MPP_Cyprus_2025_Day3_Final_Table.mp4"
+  → 패턴: 추출 실패 (비표준)
+  → AI: "WSOP Cyprus 2025 Day 3 Final Table"
+```
+
+#### AI 추론 프롬프트 (PokerGO 컨텍스트 활용)
 
 ```python
-def generate_display_title(entry: CategoryEntry) -> str:
-    """자체 카테고리/제목 생성 (PokerGO 매칭 실패 시)"""
+def generate_title_with_ai(nas_file: NasFile, pokergo_context: List[dict]) -> str:
+    """AI를 활용한 카테고리/제목 생성 (PokerGO 메타데이터 참조)"""
 
-    # Era별 처리
-    if entry.year <= 2002:  # CLASSIC Era
-        champion = WSOP_CHAMPIONS.get(entry.year, "")
-        if champion:
-            return f"WSOP Classic {entry.year} - {champion}"
-        return f"WSOP Classic {entry.year}"
+    # PokerGO 828개 에피소드 요약 (연도/카테고리별)
+    context_summary = summarize_pokergo_context(pokergo_context)
 
-    # Region별 처리
+    prompt = f"""
+    다음 NAS 파일 정보와 PokerGO 메타데이터를 참고하여 WSOP 콘텐츠의 카테고리와 제목을 생성해주세요.
+
+    ## NAS 파일 정보
+    - 파일명: {nas_file.filename}
+    - 경로: {nas_file.file_path}
+    - 추출된 연도: {nas_file.extracted_year}
+    - 추출된 이벤트: {nas_file.extracted_event}
+
+    ## PokerGO 참조 데이터 (유사 콘텐츠)
+    {context_summary}
+
+    ## 생성 규칙
+    1. PokerGO에 유사한 콘텐츠가 있으면 그 형식을 따름
+    2. 카테고리 형식: "WSOP [지역] [연도]" (예: "WSOP 2024", "WSOP Europe 2022")
+    3. 제목 형식: "[카테고리] [이벤트] [세부정보]"
+    4. 이벤트: Main Event, Bracelet Event, High Roller, Mystery Bounty 등
+    5. 세부정보: Day 1, Episode 3, Final Table, Part 2 등
+
+    ## PokerGO 제목 예시 (참고)
+    - "2024 WSOP Main Event Day 1A"
+    - "2023 WSOP $10,000 Heads Up Championship Round of 16"
+    - "WSOP Europe 2022 Main Event Episode 5"
+
+    JSON 형식으로 출력:
+    {{"category": "...", "title": "..."}}
+    """
+
+    response = llm.generate(prompt)
+    return parse_json_response(response)
+```
+
+#### PokerGO 컨텍스트 활용
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                 AI 추론 + PokerGO 컨텍스트                    │
+├──────────────────────────────────────────────────────────────┤
+│                                                              │
+│  [Input]                                                     │
+│  ├─ NAS 파일: "MPP_Cyprus_2025_Day3_FT.mp4"                 │
+│  ├─ 경로: "Z:\WSOP\Cyprus\2025\"                            │
+│  └─ PokerGO 참조:                                           │
+│      ├─ "2024 WSOP Paradise Main Event Day 1" (유사)        │
+│      ├─ "2023 WSOP Paradise $10K High Roller" (유사)        │
+│      └─ (828개 중 관련 항목 제공)                            │
+│                                                              │
+│  [Output]                                                    │
+│  ├─ category: "WSOP Cyprus 2025"                            │
+│  └─ title: "WSOP Cyprus 2025 Main Event Day 3 Final Table"  │
+│                                                              │
+│  [장점]                                                      │
+│  └─ PokerGO 제목 스타일과 일관성 유지                        │
+│                                                              │
+└──────────────────────────────────────────────────────────────┘
+```
+
+#### 처리 흐름
+
+```
+┌──────────────┐    ┌──────────────┐    ┌──────────────┐
+│  NONE 항목   │───▶│  AI 추론     │───▶│  검증 대기   │
+│  (매칭 실패)  │    │  제목 생성   │    │  (UNVERIFIED)│
+└──────────────┘    └──────────────┘    └──────────────┘
+                           │
+                           ▼
+                    ┌──────────────┐
+                    │  Batch 처리  │
+                    │  (비용 최적화)│
+                    └──────────────┘
+```
+
+#### 비용 최적화
+
+| 전략 | 설명 |
+|------|------|
+| **Batch 처리** | 여러 파일을 한 번에 처리 |
+| **캐싱** | 동일 패턴 결과 재사용 |
+| **Fallback** | AI 실패 시 패턴 기반으로 대체 |
+| **모델 선택** | **Gemini** (Google AI) 사용 |
+
+#### Gemini 모델 설정
+
+```python
+import google.generativeai as genai
+
+# Gemini 설정
+genai.configure(api_key=os.environ["GOOGLE_API_KEY"])
+model = genai.GenerativeModel("gemini-1.5-flash")  # 저비용, 빠른 추론
+
+def generate_with_gemini(prompt: str) -> str:
+    response = model.generate_content(prompt)
+    return response.text
+```
+
+| 모델 | 용도 | 비용 |
+|------|------|------|
+| **gemini-1.5-flash** | 대량 처리 (권장) | 저비용 |
+| gemini-1.5-pro | 복잡한 추론 | 중비용 |
+
+#### 패턴 기반 Fallback
+
+AI 추론 실패 또는 비용 절감 시 사용:
+
+```python
+def generate_title_fallback(entry: CategoryEntry) -> str:
+    """패턴 기반 제목 생성 (Fallback)"""
+
     region_prefix = {
-        'LV': 'WSOP',
-        'EU': 'WSOP Europe',
-        'APAC': 'WSOP APAC',
-        'PARADISE': 'WSOP Paradise',
-        'CYPRUS': 'WSOP Cyprus',
-        'LA': 'WSOP Circuit LA',
+        'LV': 'WSOP', 'EU': 'WSOP Europe', 'APAC': 'WSOP APAC',
+        'PARADISE': 'WSOP Paradise', 'CYPRUS': 'WSOP Cyprus', 'LA': 'WSOP Circuit LA',
+    }
+    event_names = {
+        'ME': 'Main Event', 'BR': 'Bracelet Event', 'HU': 'Heads Up',
+        'GM': 'Global Masters', 'HR': 'High Roller',
     }
 
     prefix = region_prefix.get(entry.category.region, 'WSOP')
+    event = event_names.get(entry.event_type, '')
+    seq = f" Day {entry.sequence}" if entry.sequence else ""
 
-    # Event Type별 처리
-    event_names = {
-        'ME': 'Main Event',
-        'BR': 'Bracelet Event',
-        'HU': 'Heads Up Championship',
-        'GM': 'Global Masters',
-        'HR': 'High Roller',
-    }
-
-    event = event_names.get(entry.event_type, entry.event_name or '')
-
-    # Sequence 처리
-    seq_suffix = ""
-    if entry.sequence:
-        seq_type = entry.sequence_type or 'Day'
-        seq_suffix = f" {seq_type} {entry.sequence}"
-
-    return f"{prefix} {entry.year} {event}{seq_suffix}".strip()
+    return f"{prefix} {entry.year} {event}{seq}".strip()
 ```
 
 ---
