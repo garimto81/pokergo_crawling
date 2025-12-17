@@ -247,9 +247,110 @@ def handle_path_change(file_id: str, new_path: str, db: Session):
 
 ---
 
-## 3. 매칭 워크플로우
+## 3. 예외 규칙
 
-### 3.1 전체 흐름
+### 3.1 제외 조건 (is_excluded = true)
+
+분석 대상에서 제외되는 파일:
+
+| 조건 | 기준 | 사유 |
+|------|------|------|
+| **파일 크기** | < 1GB | 클립/프리뷰 파일 |
+| **영상 길이** | < 30분 | 클립/하이라이트 |
+| **키워드** | `clip`, `highlight`, `promo` | 클립 파일 |
+| **Hand Clip** | `hand_`, `-hs-`, `^\\d+-wsop-` | 핸드 클립 |
+
+```python
+def is_excluded_file(file: NasFile) -> tuple[bool, str]:
+    """제외 파일 판정"""
+
+    # 크기 체크 (1GB 미만)
+    if file.file_size < 1 * 1024 * 1024 * 1024:
+        return True, "size_under_1gb"
+
+    # 길이 체크 (30분 미만)
+    if file.duration and file.duration < 30 * 60:
+        return True, "duration_under_30min"
+
+    # 키워드 체크
+    filename_lower = file.filename.lower()
+    clip_keywords = ['clip', 'highlight', 'promo', 'trailer', 'preview']
+    for keyword in clip_keywords:
+        if keyword in filename_lower:
+            return True, f"keyword_{keyword}"
+
+    # Hand Clip 패턴
+    hand_patterns = [r'hand_', r'-hs-', r'^\d+-wsop-']
+    for pattern in hand_patterns:
+        if re.search(pattern, filename_lower):
+            return True, "hand_clip"
+
+    return False, None
+```
+
+**중요**: 제외된 파일도 DB에 저장됨 (`is_excluded=true`). 단, 매칭/카테고리 분석에서 제외.
+
+### 3.2 동일 파일 처리 (중복 제거)
+
+동일 콘텐츠의 여러 파일이 있을 경우, **대표 파일 1개만 카테고리에 연결**.
+
+#### 동일 파일 판정 기준
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    동일 파일 판정                                │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  [판정 기준] (모두 일치 시 동일 파일)                            │
+│  ├─ 연도 (year)                                                 │
+│  ├─ 이벤트 타입 (event_type)                                    │
+│  ├─ 시퀀스 (episode/day/part)                                   │
+│  └─ 지역 (region)                                               │
+│                                                                 │
+│  예: Y:\wsop_2024_me_d1.mp4 = Z:\WSOP\2024\main_event_day1.mxf │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### 대표 파일 선정 규칙
+
+| 우선순위 | 기준 | 비고 |
+|----------|------|------|
+| 1 | 드라이브 | Z: (Archive) > Y: (Backup) > X: (Source) |
+| 2 | 확장자 | mp4 > mov > mxf |
+| 3 | 파일 크기 | 큰 파일 우선 |
+
+```python
+def select_primary_file(files: List[NasFile]) -> NasFile:
+    """동일 콘텐츠 파일 중 대표 파일 선정"""
+
+    drive_priority = {'Z:': 1, 'Y:': 2, 'X:': 3}
+    ext_priority = {'mp4': 1, 'mov': 2, 'mxf': 3}
+
+    def sort_key(f):
+        return (
+            drive_priority.get(f.drive, 9),
+            ext_priority.get(f.extension, 9),
+            -f.file_size  # 큰 파일 우선
+        )
+
+    sorted_files = sorted(files, key=sort_key)
+    return sorted_files[0]  # 첫 번째가 대표 파일
+```
+
+#### 역할 할당
+
+| role | 설명 |
+|------|------|
+| `PRIMARY` | 대표 파일 (카테고리 연결) |
+| `BACKUP` | 백업 파일 (동일 콘텐츠, 다른 위치) |
+| `EXCLUDED` | 제외 파일 (분석 대상 외) |
+
+---
+
+## 4. 매칭 워크플로우
+
+### 4.1 전체 흐름
 
 ```
 ┌──────────────┐    ┌──────────────┐    ┌──────────────┐    ┌──────────────┐
