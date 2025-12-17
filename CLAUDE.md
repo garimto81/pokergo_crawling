@@ -153,7 +153,8 @@ data/
 
 상세 규칙: [docs/MATCHING_RULES.md](docs/MATCHING_RULES.md) (v5.0)
 
-**매칭률: 97.6%** (1,371/1,405 파일)
+**패턴 추출률**: 97.6% (1,371/1,405 파일) - 파일명에서 메타데이터 추출 성공률
+**PokerGO 매칭률**: 53.3% (440/826 그룹) - Asset Group과 PokerGO 에피소드 매칭률
 
 **주요 패턴 (33개):**
 - `WS{YY}_{TYPE}{EP}` → WS11_ME25 = 2011 Main Event Ep.25

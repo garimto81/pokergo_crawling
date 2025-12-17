@@ -117,11 +117,15 @@ docs/
 │           Current Matching Status            │
 ├─────────────────────────────────────────────┤
 │  PokerGO Episodes:       828                │
-│  NAS Groups:             221                │
-│  ├─ MATCHED:             101 (45.7%)        │
-│  ├─ NAS_ONLY_HISTORIC:    18 (8.1%)         │
-│  └─ NAS_ONLY_MODERN:     102 (46.2%)        │
-│  DUPLICATE:                0 (100% 해결)     │
+│  Asset Groups:           826                │
+│  ├─ MATCHED:             440 (53.3%)        │
+│  └─ NAS_ONLY:            386 (46.7%)        │
+│                                             │
+│  NAS Files:            1,405                │
+│  ├─ Active:              858                │
+│  └─ Excluded:            547                │
+│                                             │
+│  패턴 추출률:           97.6%                │
 └─────────────────────────────────────────────┘
 ```
 
