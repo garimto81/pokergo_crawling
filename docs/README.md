@@ -62,7 +62,11 @@ NAMS는 3개의 NAS 드라이브(X:/Y:/Z:)와 PokerGO 메타데이터를 통합�
 | Total Episodes | 828 |
 | Source | wsop_final.json |
 | Coverage | 1973-2025 |
-| Era Distribution | CLASSIC(20), BOOM(236), HD(572) |
+| Era Distribution | CLASSIC(234), BOOM(included), HD(558), EU(36) |
+
+**상세 문서**:
+- [POKERGO_WSOP_CONTENT.md](POKERGO_WSOP_CONTENT.md) - 카테고리별 콘텐츠 가이드
+- [POKERGO_WSOP_FULL_LIST.md](POKERGO_WSOP_FULL_LIST.md) - 828개 에피소드 전체 목록
 
 ---
 
@@ -88,6 +92,10 @@ docs/
 │   ├── MATCHING_RULES.md           # 매칭 규칙 핵심 (v5.0)
 │   ├── MATCHING_PATTERNS_DETAIL.md # 패턴 상세/변경이력 (v5.0)
 │   └── NAS_DRIVE_STRUCTURE.md      # 드라이브 물리 구조 (v1.0)
+│
+├── [PokerGO Data]
+│   ├── POKERGO_WSOP_CONTENT.md     # 카테고리별 콘텐츠 가이드
+│   └── POKERGO_WSOP_FULL_LIST.md   # 828개 에피소드 전체 목록
 │
 ├── [Status Reports]
 │   └── DB_STATUS_REPORT.md     # 현황 진단 보고서
