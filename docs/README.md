@@ -1,22 +1,33 @@
 # NAMS Documentation Index
 
-> NAS Asset Management System - WSOP 52년 역사 DB 체계화 프로젝트
+> NAS Asset Management System - WSOP 52년 역사 카탈로그 구축
 
-**Version**: 1.0 | **Last Updated**: 2025-12-17
+**Version**: 2.0 | **Last Updated**: 2025-12-17
 
 ---
 
 ## Project Overview
 
-NAMS는 3개의 NAS 드라이브(X:/Y:/Z:)와 PokerGO 메타데이터를 통합하여
+NAMS는 3개의 NAS 드라이브(X:/Y:/Z:)에 보유한 WSOP 영상을 기반으로
 **1973년부터 현재까지 52년간의 WSOP 콘텐츠 카탈로그**를 구축하는 시스템입니다.
+
+### 핵심 인사이트 (v3.0)
+
+```
+PokerGO 828개 = 편집된 에피소드 (방송용)
+NAS 1,405개 = 생방송 스트리밍 원본 (Raw footage)
+
+→ 1:1 매칭은 본질적으로 불가능
+→ NAS 파일 기반 자체 카탈로그 구축으로 전환
+```
 
 ### 핵심 목표
 
 1. **NAS 파일 통합 관리**: 3개 드라이브(X:/Y:/Z:) 비디오 파일 메타데이터 통합
-2. **PokerGO 매칭**: 828개 PokerGO 에피소드와 NAS 파일 1:1 자동 매칭
-3. **Asset Grouping**: 동일 콘텐츠 파일 그룹화 (Primary/Backup 구분)
-4. **카탈로그 생성**: Netflix 스타일 표시 제목 및 Google Sheets 5시트 내보내기
+2. **자체 카탈로그 구축**: NAS 파일 기반 Category → CatalogEntry 생성
+3. **제목 자동 생성**: 패턴 기반 display_title 생성
+4. **수동 검증 워크플로우**: 자동 생성 + 사람 검증 하이브리드
+5. **PokerGO 참조 연결**: 참조 정보로만 활용 (1:N 관계)
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -80,9 +91,10 @@ docs/
 │   └── SYSTEM_OVERVIEW.md      # 전체 시스템 아키텍처 (v2.1)
 │
 ├── [PRD - Requirements]
-│   ├── PRD-NAMS-MATCHING.md    # 매칭 시스템 요구사항 (v2.0)
-│   ├── PRD-POKERGO-SOURCE.md   # X: 드라이브 통합 PRD (v1.0)
-│   └── PRD-NAMS-REFACTORING.md # 기술 부채 로드맵
+│   ├── PRD-CATALOG-DB.md         # ⭐ NAS 중심 카탈로그 DB 설계 (v1.0) - 최신
+│   ├── PRD-NAMS-MATCHING.md      # 매칭 시스템 요구사항 (v2.0) - deprecated
+│   ├── PRD-POKERGO-SOURCE.md     # X: 드라이브 통합 PRD (v1.0)
+│   └── PRD-NAMS-REFACTORING.md   # 기술 부채 로드맵
 │
 ├── [Operations]
 │   ├── AUTOMATION_PIPELINE.md  # 파이프라인 실행 가이드 (v1.0)
@@ -165,7 +177,8 @@ python scripts/export_4sheets.py
 
 | Document | Purpose | Version |
 |----------|---------|---------|
-| [PRD-NAMS-MATCHING.md](PRD-NAMS-MATCHING.md) | 매칭 시스템 4대 목표, DUPLICATE 해결 규칙, 카탈로그 설계 | v2.0 |
+| ⭐ [PRD-CATALOG-DB.md](PRD-CATALOG-DB.md) | **NAS 중심 카탈로그 DB 설계** - 최신 접근법 | v1.0 |
+| [PRD-NAMS-MATCHING.md](PRD-NAMS-MATCHING.md) | ~~매칭 시스템~~ (deprecated - 1:1 매칭 불가 확인) | v2.0 |
 | [PRD-POKERGO-SOURCE.md](PRD-POKERGO-SOURCE.md) | X: 드라이브 통합 사양, Scanner/Export 확장 | v1.0 |
 | [PRD-NAMS-REFACTORING.md](PRD-NAMS-REFACTORING.md) | 코드 품질 개선, 기술 부채 해결 로드맵 | v1.0 |
 
