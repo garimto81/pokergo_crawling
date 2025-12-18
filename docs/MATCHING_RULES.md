@@ -2,7 +2,7 @@
 
 NAS 파일과 PokerGO 콘텐츠 매칭 및 Asset Grouping 규칙 정의서.
 
-**Version**: 5.0 | **Date**: 2025-12-17
+**Version**: 5.1 | **Date**: 2025-12-18
 
 > 상세 패턴 예시 및 변경 이력: [MATCHING_PATTERNS_DETAIL.md](MATCHING_PATTERNS_DETAIL.md)
 
@@ -121,6 +121,24 @@ def get_era(year: int) -> str:
 | `bracelet` | bracelet |
 | `high roller` | high_roller |
 | `_PPC` | ppc (별도 대회) |
+
+### Generic Title 금지 규칙 (CRITICAL)
+
+> **"Event" / "Bracelet Event"는 사용 금지. 모든 타이틀에 구체적 이벤트명 필수.**
+
+| 금지 | 허용 | 설명 |
+|------|------|------|
+| `Event` | `Main Event` | 단독 "Event" 사용 금지 |
+| `Bracelet Event` | `Event #1 $5K NLH` | 이벤트 번호 + 이름 |
+| `Bracelet Event \| Day 1` | `€50K Diamond High Roller \| Day 1` | 구체적 이벤트명 |
+
+**타이틀 생성 우선순위**:
+1. `Event #{num} {event_name}` - 이벤트 번호 + 이름
+2. `Event #{num}` - 이벤트 번호만 (이름 없는 경우)
+3. `{event_name}` - 이름만 (번호 없는 경우)
+4. `{filename[:40]}` - 최후 fallback (파일명 앞부분)
+
+**구현**: `generate_title()` 함수에서 generic fallback 제거
 
 ---
 
@@ -308,6 +326,7 @@ if era == 'CLASSIC' and event_type == 'ME':
 
 | 버전 | 날짜 | 변경 내용 |
 |------|------|----------|
+| 5.1 | 2025-12-18 | Generic Title 금지 규칙 추가, Day 추출 버그 수정 |
 | 5.0 | 2025-12-17 | Region/Episode 매칭 강화, DUPLICATE 53→18 감소 |
 | 4.0 | 2025-12-17 | DUPLICATE 완전 해결 (374→0), LV 기본 지역 적용 |
 | 3.0 | 2025-12-16 | Era 분류, Origin/Archive 관계 정립, 4시트 시스템 |
