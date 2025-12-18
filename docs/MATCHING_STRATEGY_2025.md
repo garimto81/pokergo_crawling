@@ -1,6 +1,6 @@
 # 2025 매칭 전략
 
-**버전**: 1.4
+**버전**: 1.5
 **날짜**: 2025-12-18
 
 ---
@@ -553,6 +553,36 @@ Z:\...\2025 WSOP-EUROPE #2 KING'S MILLION FINAL\...
 - Region = EU
 - 파일명에서 이벤트명 추출 실패 (HyperDeck 파일 등)
 
+### 8.7 Role 및 Backup Type 분류 ★ v1.5
+
+파일을 아카이빙 역할에 따라 분류:
+
+| Role | Backup Type | 설명 | 용도 |
+|------|-------------|------|------|
+| **PRIMARY** | - | 주 아카이빙 대상 | 서비스용, 메인 콘텐츠 |
+| **BACKUP** | NC | No Commentary 버전 | 백업 보관, 해설 없는 버전 |
+| **BACKUP** | RAW | HyperDeck 원본 | 백업 보관, 재편집용 |
+
+**분류 규칙:**
+```python
+def determine_role(is_raw: bool, version: str) -> tuple[str, str]:
+    if version == 'NC':
+        return ('BACKUP', 'NC')
+    if is_raw:
+        return ('BACKUP', 'RAW')
+    return ('PRIMARY', '')
+```
+
+**제목 표기:**
+- NC 파일: `Main Event Day 1A (No Commentary)`
+- RAW + NC 파일: `Main Event Day 1A (Part 01) [RAW] (No Commentary)`
+
+**현황 (132개 파일):**
+| Role | Files | 비율 |
+|------|-------|------|
+| PRIMARY | 89 | 67% |
+| BACKUP (NC) | 43 | 33% |
+
 ---
 
 ## 변경 이력
@@ -564,3 +594,4 @@ Z:\...\2025 WSOP-EUROPE #2 KING'S MILLION FINAL\...
 | 1.2 | 2025-12-18 | 정규화 규칙 추가: Final Table/Day 분리, EU Bracelet 분류, NC/STREAM 버전, Cyprus Entry Key |
 | 1.3 | 2025-12-18 | 경로 기반 추출 추가: Day 폴더, NC 파일 Part 접미사 (-XXX) |
 | 1.4 | 2025-12-18 | EU 이벤트명 폴더 추출 추가: HyperDeck 등 파일명 없는 경우 경로에서 이벤트명 추출 |
+| 1.5 | 2025-12-18 | Role/Backup Type 분류 추가: PRIMARY (89개), BACKUP NC (43개), NC 파일 제목에 "(No Commentary)" 표기 |
