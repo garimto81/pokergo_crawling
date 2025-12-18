@@ -12,6 +12,10 @@ JSON_PATH = Path('data/sources/nas/nas_files.json')
 
 def extract_year(full_path: str, filename: str) -> int | None:
     """Extract year from path or filename."""
+    # GOG files are always 2023
+    if 'GOG' in full_path.upper() or 'GOG' in filename.upper():
+        return 2023
+
     # From path: WSOP 2024, WSOP-LAS VEGAS\2024, etc.
     match = re.search(r'WSOP[E]?\s*(\d{4})', full_path, re.I)
     if match:

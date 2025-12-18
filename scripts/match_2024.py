@@ -114,13 +114,15 @@ def extract_event_type(full_path: str, filename: str, region: str = '') -> str:
             return 'ME'
         return 'BR'
 
+    # LV: Check Main Event first (higher priority)
+    if 'MAIN EVENT' in f and 'BRACELET' not in f:
+        return 'ME'
+
     # LV: -be- indicates Bracelet Event
     if '-be-' in f.lower():
         return 'BR'
     if 'BRACELET' in p or 'BRACELET' in f:
         return 'BR'
-    if 'MAIN EVENT' in p or 'MAIN EVENT' in f:
-        return 'ME'
 
     # LV region default to BR (most 2024 files are Bracelet Events)
     if region == 'LV':
@@ -134,6 +136,11 @@ def extract_day(filename: str) -> str:
     # -ft- pattern (LV Final Table)
     if '-ft-' in filename.lower():
         return 'FT'
+
+    # Day NA-B-C pattern (e.g., Day 2A-B-C)
+    match = re.search(r'Day\s*(\d+)([A-D])-([A-D])-([A-D])', filename, re.I)
+    if match:
+        return f'{match.group(1)}{match.group(2)}{match.group(3)}{match.group(4)}'
 
     # Day N[A-D] (standard)
     match = re.search(r'Day\s*(\d+)\s*([A-D])?', filename, re.I)
@@ -159,6 +166,7 @@ def extract_episode_num(filename: str) -> int | None:
     Patterns:
     - WE24-ME-XX (EU Main Event episodes)
     - WCLA24-XX (CIRCUIT LA episodes)
+    - Episode N (LV Main Event episodes)
     """
     # WE24-ME-NN
     match = re.search(r'WE24-ME-(\d+)', filename, re.I)
@@ -166,6 +174,10 @@ def extract_episode_num(filename: str) -> int | None:
         return int(match.group(1))
     # WCLA24-NN
     match = re.search(r'WCLA24-(\d+)', filename, re.I)
+    if match:
+        return int(match.group(1))
+    # Episode N (LV Main Event)
+    match = re.search(r'Episode\s*(\d+)', filename, re.I)
     if match:
         return int(match.group(1))
     return None
@@ -266,13 +278,22 @@ def generate_entry_key(elem: NasElement) -> str:
     parts = []
 
     if elem.region == 'LV':
-        parts.append('WSOP_2024_BR')
-        if elem.event_num:
-            parts.append(f'E{elem.event_num}')
-        if elem.day:
-            parts.append(f'D{elem.day}')
-        if elem.part:
-            parts.append(f'P{elem.part}')
+        if elem.event_type == 'ME':
+            parts.append('WSOP_2024_ME')
+            if elem.day:
+                parts.append(f'D{elem.day}')
+            if elem.part:
+                parts.append(f'P{elem.part}')
+            if elem.episode_num:
+                parts.append(f'EP{elem.episode_num}')
+        else:
+            parts.append('WSOP_2024_BR')
+            if elem.event_num:
+                parts.append(f'E{elem.event_num}')
+            if elem.day:
+                parts.append(f'D{elem.day}')
+            if elem.part:
+                parts.append(f'P{elem.part}')
 
     elif elem.region == 'EU':
         parts.append('WSOP_2024_EU')
@@ -321,6 +342,8 @@ def generate_entry_key(elem: NasElement) -> str:
 def generate_category(region: str, event_type: str, event_num: int | None = None) -> str:
     """Generate category name."""
     if region == 'LV':
+        if event_type == 'ME':
+            return 'WSOP 2024 Main Event'
         return 'WSOP 2024 Bracelet Events'
     elif region == 'EU':
         if event_type == 'ME':
@@ -349,7 +372,17 @@ def generate_title(elem: NasElement) -> str:
     day_display = normalize_day_display(elem.day)
 
     if elem.region == 'LV':
-        if elem.event_num:
+        if elem.event_type == 'ME':
+            # Main Event
+            title = 'Main Event'
+            if elem.episode_num:
+                title += f' Episode {elem.episode_num}'
+            elif day_display:
+                title += f' {day_display}'
+            if elem.part:
+                title += f' Part {elem.part}'
+        elif elem.event_num:
+            # Bracelet Event with event number
             title = f'Event #{elem.event_num}'
             if elem.event_name:
                 title += f' {elem.event_name}'
@@ -357,12 +390,16 @@ def generate_title(elem: NasElement) -> str:
                 title += f' ${elem.buy_in.upper()}'
                 if elem.game_type:
                     title += f' {elem.game_type}'
+            if day_display:
+                title += f' | {day_display}'
+            if elem.part:
+                title += f' Part {elem.part}'
         else:
             title = 'Bracelet Event'
-        if day_display:
-            title += f' | {day_display}'
-        if elem.part:
-            title += f' Part {elem.part}'
+            if day_display:
+                title += f' | {day_display}'
+            if elem.part:
+                title += f' Part {elem.part}'
         if elem.is_clip:
             title += ' [Clip]'
         return title
