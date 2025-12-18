@@ -2,7 +2,7 @@
 
 NAS 파일과 PokerGO 콘텐츠 매칭 및 Asset Grouping 규칙 정의서.
 
-**Version**: 5.1 | **Date**: 2025-12-18
+**Version**: 5.2 | **Date**: 2025-12-18
 
 > 상세 패턴 예시 및 변경 이력: [MATCHING_PATTERNS_DETAIL.md](MATCHING_PATTERNS_DETAIL.md)
 
@@ -138,7 +138,12 @@ def get_era(year: int) -> str:
 3. `{event_name}` - 이름만 (번호 없는 경우)
 4. `{filename[:40]}` - 최후 fallback (파일명 앞부분)
 
-**구현**: `generate_title()` 함수에서 generic fallback 제거
+**Day 중복 방지**:
+- event_name에 "Day" 포함 시 day_display 추가 스킵
+- 예: `$250K Super High Roller - Day 3` → Day 3 추가 안 함 ✅
+- 예: `$25K High Roller` → `| Day 2` 추가 ✅
+
+**구현**: `generate_title()` 함수에서 generic fallback 제거, Day 중복 체크
 
 ---
 
@@ -326,6 +331,7 @@ if era == 'CLASSIC' and event_type == 'ME':
 
 | 버전 | 날짜 | 변경 내용 |
 |------|------|----------|
+| 5.2 | 2025-12-18 | Day 중복 방지 규칙 추가 (event_name에 Day 포함 시 스킵) |
 | 5.1 | 2025-12-18 | Generic Title 금지 규칙 추가, Day 추출 버그 수정 |
 | 5.0 | 2025-12-17 | Region/Episode 매칭 강화, DUPLICATE 53→18 감소 |
 | 4.0 | 2025-12-17 | DUPLICATE 완전 해결 (374→0), LV 기본 지역 적용 |
