@@ -2,7 +2,7 @@
 
 NAS 파일과 PokerGO 콘텐츠 매칭 및 Asset Grouping 규칙 정의서.
 
-**Version**: 5.2 | **Date**: 2025-12-18
+**Version**: 5.3 | **Date**: 2025-12-18
 
 > 상세 패턴 예시 및 변경 이력: [MATCHING_PATTERNS_DETAIL.md](MATCHING_PATTERNS_DETAIL.md)
 
@@ -201,6 +201,31 @@ def get_era(year: int) -> str:
 2. 복사 표시 없음 (`(1)` 패턴 없음)
 3. 확장자 우선순위 (mp4 > mov > mxf)
 
+### GOG (Game of Gold) 버전 우선순위
+
+> **2023 GOG 파일 전용 규칙. 동일 Episode 내에서 최고 우선순위 1개만 PRIMARY.**
+
+| 우선순위 | 버전 키워드 | 설명 |
+|---------|------------|------|
+| 3 (최고) | `찐최종` | 최종 확정본 |
+| 2 | `최종` | 최종본 |
+| 1 | `클린본` | 클린 버전 |
+| 0 (최저) | (없음) | 기타 버전 |
+
+**적용 예시**:
+```
+Episode 11:
+  ★ E11_GOG_final_edit_20231203_찐최종.mp4  → PRIMARY (우선순위 3)
+    E11_GOG_final_edit_클린본_20231201.mp4  → BACKUP  (우선순위 1)
+
+Episode 12:
+  ★ E12_GOG_final_edit_20231206_최종.mp4    → PRIMARY (우선순위 2)
+    E12_GOG_final_edit_클린본_20231130.mp4  → BACKUP  (우선순위 1)
+    E12_GOG_final_edit_클린본_20240703.mp4  → BACKUP  (우선순위 1)
+```
+
+**구현**: `extract_gog_version_type()` 함수에서 우선순위 추출
+
 ### Origin/Archive 관계
 
 | 저장소 | 드라이브 | 용도 |
@@ -331,6 +356,7 @@ if era == 'CLASSIC' and event_type == 'ME':
 
 | 버전 | 날짜 | 변경 내용 |
 |------|------|----------|
+| 5.3 | 2025-12-18 | GOG 버전 우선순위 규칙 추가 (찐최종 > 최종 > 클린본) |
 | 5.2 | 2025-12-18 | Day 중복 방지 규칙 추가 (event_name에 Day 포함 시 스킵) |
 | 5.1 | 2025-12-18 | Generic Title 금지 규칙 추가, Day 추출 버그 수정 |
 | 5.0 | 2025-12-17 | Region/Episode 매칭 강화, DUPLICATE 53→18 감소 |
