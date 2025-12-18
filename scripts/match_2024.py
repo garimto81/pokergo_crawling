@@ -61,6 +61,9 @@ def extract_region(full_path: str) -> str:
         return 'PARADISE'
     elif 'CIRCUIT' in p:
         return 'CIRCUIT'
+    # X: drive WSOP 2024 = Las Vegas Bracelet Events
+    elif 'POKERGO' in p and 'WSOP 2024' in p:
+        return 'LV'
     return 'OTHER'
 
 
@@ -114,10 +117,14 @@ def extract_event_type(full_path: str, filename: str, region: str = '') -> str:
     # LV: -be- indicates Bracelet Event
     if '-be-' in f.lower():
         return 'BR'
-    if 'BRACELET' in p:
+    if 'BRACELET' in p or 'BRACELET' in f:
         return 'BR'
     if 'MAIN EVENT' in p or 'MAIN EVENT' in f:
         return 'ME'
+
+    # LV region default to BR (most 2024 files are Bracelet Events)
+    if region == 'LV':
+        return 'BR'
 
     return 'OTHER'
 
@@ -166,7 +173,12 @@ def extract_episode_num(filename: str) -> int | None:
 
 def extract_buy_in(filename: str) -> str:
     """Extract buy-in from filename (LV 2024)."""
+    # Pattern 1: -5k-, -25k- (clip style)
     match = re.search(r'(\d+k)-', filename, re.I)
+    if match:
+        return match.group(1).lower()
+    # Pattern 2: $5K, $25K (X: drive style)
+    match = re.search(r'\$(\d+(?:\.\d+)?K)', filename, re.I)
     if match:
         return match.group(1).lower()
     return ''
@@ -200,10 +212,28 @@ def is_hand_clip(filename: str) -> bool:
     return False
 
 
+def extract_part(filename: str) -> int | None:
+    """Extract part number from filename."""
+    # Pattern 1: (Part 1), (Part 2)
+    match = re.search(r'\(Part\s*(\d+)\)', filename, re.I)
+    if match:
+        return int(match.group(1))
+    # Pattern 2: Part 1, Part 2
+    match = re.search(r'Part\s*(\d+)', filename, re.I)
+    if match:
+        return int(match.group(1))
+    return None
+
+
 def extract_event_name(filename: str, full_path: str) -> str:
     """Extract event name from filename or path."""
-    # LV: Extract from filename pattern
-    match = re.search(r'-(5k|10k|25k|50k)-([a-z-]+)-', filename, re.I)
+    # X: drive style: Event #1 $5K Champions Reunion (Part 1)
+    match = re.search(r'Event\s*#\d+\s+(\$[\d.]+K\s+.+?)(?:\s*\(Part|\s*\.mp4|$)', filename, re.I)
+    if match:
+        return match.group(1).strip()
+
+    # LV clip style: -5k-champions-reunion-
+    match = re.search(r'-(\d+k)-([a-z-]+)-', filename, re.I)
     if match:
         buy_in = match.group(1)
         name_part = match.group(2).replace('-', ' ').title()
@@ -241,6 +271,8 @@ def generate_entry_key(elem: NasElement) -> str:
             parts.append(f'E{elem.event_num}')
         if elem.day:
             parts.append(f'D{elem.day}')
+        if elem.part:
+            parts.append(f'P{elem.part}')
 
     elif elem.region == 'EU':
         parts.append('WSOP_2024_EU')
@@ -319,14 +351,18 @@ def generate_title(elem: NasElement) -> str:
     if elem.region == 'LV':
         if elem.event_num:
             title = f'Event #{elem.event_num}'
-            if elem.buy_in:
+            if elem.event_name:
+                title += f' {elem.event_name}'
+            elif elem.buy_in:
                 title += f' ${elem.buy_in.upper()}'
-            if elem.game_type:
-                title += f' {elem.game_type}'
+                if elem.game_type:
+                    title += f' {elem.game_type}'
         else:
             title = 'Bracelet Event'
         if day_display:
             title += f' | {day_display}'
+        if elem.part:
+            title += f' Part {elem.part}'
         if elem.is_clip:
             title += ' [Clip]'
         return title
@@ -392,6 +428,7 @@ def load_nas_files(db) -> list[NasElement]:
         episode_num = extract_episode_num(f.filename)
         buy_in = extract_buy_in(f.filename)
         game_type = extract_game_type(f.filename)
+        part = extract_part(f.filename)
         clip = is_hand_clip(f.filename)
         file_type = 'CLIP' if clip else 'EPISODE'
 
@@ -410,7 +447,7 @@ def load_nas_files(db) -> list[NasElement]:
             event_num=event_num,
             event_name=event_name,
             day=day,
-            part=None,
+            part=part,
             size_bytes=f.size_bytes or 0,
             is_clip=clip,
             file_type=file_type,
