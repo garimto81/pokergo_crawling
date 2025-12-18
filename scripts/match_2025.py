@@ -43,6 +43,8 @@ class NasElement:
     cyprus_event: str = ''     # Cyprus specific event name
     session: int | None = None  # Session number for MPP Main Event
     version: str = ''          # NC (No Commentary), STREAM, or empty
+    role: str = 'PRIMARY'      # PRIMARY or BACKUP
+    backup_type: str = ''      # NC, RAW, or empty for PRIMARY
 
 
 @dataclass
@@ -325,6 +327,26 @@ def extract_session(filename: str) -> int | None:
     return None
 
 
+def determine_role(is_raw: bool, version: str) -> tuple[str, str]:
+    """Determine file role and backup type.
+
+    Returns:
+        (role, backup_type) tuple
+        - role: 'PRIMARY' or 'BACKUP'
+        - backup_type: 'NC', 'RAW', or '' for PRIMARY
+
+    Rules:
+        - NC (No Commentary) → BACKUP, NC
+        - HyperDeck RAW → BACKUP, RAW
+        - STREAM or normal → PRIMARY, ''
+    """
+    if version == 'NC':
+        return ('BACKUP', 'NC')
+    if is_raw:
+        return ('BACKUP', 'RAW')
+    return ('PRIMARY', '')
+
+
 # =============================================================================
 # EU Event Names Mapping
 # =============================================================================
@@ -531,6 +553,9 @@ def generate_title(elem: NasElement) -> str:
                 title += f' Part {elem.part}'
             elif elem.is_raw:
                 title += ' [RAW]'
+            # Add No Commentary suffix for NC version (backup archive)
+            if elem.version == 'NC':
+                title += ' (No Commentary)'
             return title
         else:
             # Bracelet Event
@@ -549,6 +574,9 @@ def generate_title(elem: NasElement) -> str:
                 title += f' Part {elem.part}'
             elif elem.is_raw:
                 title += ' [RAW]'
+            # Add No Commentary suffix for NC version (backup archive)
+            if elem.version == 'NC':
+                title += ' (No Commentary)'
             return title
     elif elem.region == 'CYPRUS':
         # Cyprus event: Main Event or specific event name
@@ -672,6 +700,9 @@ def load_nas_files(db) -> list[NasElement]:
         # Extract version (NC = No Commentary, STREAM)
         version = extract_version(f.full_path)
 
+        # Determine role (PRIMARY/BACKUP) and backup_type (NC/RAW)
+        role, backup_type = determine_role(raw, version)
+
         elements.append(NasElement(
             file_id=f.id,
             full_path=f.full_path or '',
@@ -686,7 +717,9 @@ def load_nas_files(db) -> list[NasElement]:
             size_bytes=f.size_bytes or 0,
             cyprus_event=cyprus_event,
             session=session,
-            version=version
+            version=version,
+            role=role,
+            backup_type=backup_type
         ))
 
     return elements
@@ -886,7 +919,8 @@ def export_to_sheets(results: dict[str, MatchEntry]):
     # Sheet 1: 2025_Catalog - Full file catalog with Match Type
     print('\n[1/3] 2025_Catalog')
     headers = [
-        'No', 'Entry Key', 'Match Type', 'Category', 'Title', 'PokerGO Title',
+        'No', 'Entry Key', 'Match Type', 'Role', 'Backup Type',
+        'Category', 'Title', 'PokerGO Title',
         'Region', 'Event Type', 'Event #', 'Day', 'Part', 'RAW',
         'Size (GB)', 'Filename', 'Full Path'
     ]
@@ -903,6 +937,8 @@ def export_to_sheets(results: dict[str, MatchEntry]):
                     idx,
                     entry.entry_key,
                     entry.match_type,
+                    nas.role,
+                    nas.backup_type or '-',
                     entry.category,
                     entry.title,
                     entry.pkg_title or '',
