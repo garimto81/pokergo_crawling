@@ -391,11 +391,16 @@ def generate_title(elem: NasElement) -> str:
             title = f'Event #{elem.event_num}'
             if elem.event_name:
                 title += f' {elem.event_name}'
+                # Skip day_display if event_name already contains Day info
+                has_day_in_name = 'day' in elem.event_name.lower()
             elif elem.buy_in:
                 title += f' ${elem.buy_in.upper()}'
                 if elem.game_type:
                     title += f' {elem.game_type}'
-            if day_display:
+                has_day_in_name = False
+            else:
+                has_day_in_name = False
+            if day_display and not has_day_in_name:
                 title += f' | {day_display}'
             if elem.part:
                 title += f' Part {elem.part}'
@@ -403,10 +408,12 @@ def generate_title(elem: NasElement) -> str:
             # No event number - use specific event name (never generic "Bracelet Event")
             if elem.event_name:
                 title = elem.event_name
+                has_day_in_name = 'day' in elem.event_name.lower()
             else:
                 # Fallback to filename prefix
                 title = elem.filename[:40].replace('.mp4', '').replace('.mov', '')
-            if day_display:
+                has_day_in_name = False
+            if day_display and not has_day_in_name:
                 title += f' | {day_display}'
             if elem.part:
                 title += f' Part {elem.part}'
