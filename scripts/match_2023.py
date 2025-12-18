@@ -181,8 +181,9 @@ def generate_title(elem: NasElement) -> str:
     if elem.content_type == 'GOG':
         if elem.episode_num:
             title = f'Episode {elem.episode_num}'
-            # Add version type marker
-            if elem.version_type:
+            # PRIMARY (찐최종): clean title only
+            # BACKUP: add version marker for distinction
+            if elem.role == 'BACKUP' and elem.version_type:
                 title += f' ({elem.version_type})'
             return title
         return elem.filename[:40]
