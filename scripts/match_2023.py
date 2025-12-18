@@ -112,19 +112,21 @@ def extract_part(filename: str) -> int | None:
 def extract_gog_version_type(filename: str) -> tuple[str, int]:
     """Extract GOG version type and priority.
 
-    Priority (higher = better):
-    - 찐최종: 3 (highest)
-    - 최종: 2
-    - 클린본: 1
-    - 기타: 0 (lowest)
+    Priority order (lowest to highest):
+    - 클린본: 1 (lowest)
+    - 표기없음: 2 (작업본)
+    - 최종: 3
+    - 찐최종: 4 (highest, PRIMARY)
+
+    Only 찐최종 is PRIMARY, all others are BACKUP.
     """
     if '찐최종' in filename:
-        return ('찐최종', 3)
+        return ('찐최종', 4)
     elif '최종' in filename and '찐최종' not in filename:
-        return ('최종', 2)
+        return ('최종', 3)
     elif '클린본' in filename:
         return ('클린본', 1)
-    return ('', 0)
+    return ('작업본', 2)  # 표기없음 = 작업본
 
 
 # =============================================================================
@@ -178,7 +180,11 @@ def generate_title(elem: NasElement) -> str:
     """Generate display title from NAS element."""
     if elem.content_type == 'GOG':
         if elem.episode_num:
-            return f'Episode {elem.episode_num}'
+            title = f'Episode {elem.episode_num}'
+            # Add version type marker
+            if elem.version_type:
+                title += f' ({elem.version_type})'
+            return title
         return elem.filename[:40]
 
     elif elem.content_type == 'WSOP_ME':
@@ -249,23 +255,10 @@ def load_nas_files(db) -> list[NasElement]:
             version_type=version_type
         ))
 
-    # Assign GOG roles based on version priority
-    # Group GOG files by episode
-    gog_by_episode = defaultdict(list)
+    # Assign GOG roles: Only 찐최종 is PRIMARY, all others are BACKUP
     for elem in elements:
-        if elem.content_type == 'GOG' and elem.episode_num:
-            gog_by_episode[elem.episode_num].append(elem)
-
-    # For each episode, find highest priority and assign roles
-    for episode_num, ep_files in gog_by_episode.items():
-        # Get priority for each file
-        priorities = [(elem, extract_gog_version_type(elem.filename)[1]) for elem in ep_files]
-        # Sort by priority descending
-        priorities.sort(key=lambda x: x[1], reverse=True)
-
-        # Highest priority file is PRIMARY, rest are BACKUP
-        for i, (elem, priority) in enumerate(priorities):
-            if i == 0:
+        if elem.content_type == 'GOG':
+            if elem.version_type == '찐최종':
                 elem.role = 'PRIMARY'
             else:
                 elem.role = 'BACKUP'

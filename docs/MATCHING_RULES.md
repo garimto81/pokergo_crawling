@@ -2,7 +2,7 @@
 
 NAS 파일과 PokerGO 콘텐츠 매칭 및 Asset Grouping 규칙 정의서.
 
-**Version**: 5.3 | **Date**: 2025-12-18
+**Version**: 5.4 | **Date**: 2025-12-18
 
 > 상세 패턴 예시 및 변경 이력: [MATCHING_PATTERNS_DETAIL.md](MATCHING_PATTERNS_DETAIL.md)
 
@@ -203,28 +203,27 @@ def get_era(year: int) -> str:
 
 ### GOG (Game of Gold) 버전 우선순위
 
-> **2023 GOG 파일 전용 규칙. 동일 Episode 내에서 최고 우선순위 1개만 PRIMARY.**
+> **2023 GOG 파일 전용 규칙. 찐최종만 PRIMARY, 나머지는 모두 BACKUP.**
 
-| 우선순위 | 버전 키워드 | 설명 |
-|---------|------------|------|
-| 3 (최고) | `찐최종` | 최종 확정본 |
-| 2 | `최종` | 최종본 |
-| 1 | `클린본` | 클린 버전 |
-| 0 (최저) | (없음) | 기타 버전 |
+| 우선순위 | 버전 키워드 | Role | Title 표기 |
+|---------|------------|------|-----------|
+| 4 (최고) | `찐최종` | **PRIMARY** | (찐최종) |
+| 3 | `최종` | BACKUP | (최종) |
+| 2 | (표기없음) | BACKUP | (작업본) |
+| 1 (최저) | `클린본` | BACKUP | (클린본) |
 
 **적용 예시**:
 ```
 Episode 11:
-  ★ E11_GOG_final_edit_20231203_찐최종.mp4  → PRIMARY (우선순위 3)
-    E11_GOG_final_edit_클린본_20231201.mp4  → BACKUP  (우선순위 1)
+  ★ E11_GOG_final_edit_20231203_찐최종.mp4  → PRIMARY  Title: Episode 11 (찐최종)
+    E11_GOG_final_edit_클린본_20231201.mp4  → BACKUP   Title: Episode 11 (클린본)
 
-Episode 12:
-  ★ E12_GOG_final_edit_20231206_최종.mp4    → PRIMARY (우선순위 2)
-    E12_GOG_final_edit_클린본_20231130.mp4  → BACKUP  (우선순위 1)
-    E12_GOG_final_edit_클린본_20240703.mp4  → BACKUP  (우선순위 1)
+Episode 12:  (찐최종 없음 → 모두 BACKUP)
+    E12_GOG_final_edit_20231206_최종.mp4    → BACKUP   Title: Episode 12 (최종)
+    E12_GOG_final_edit_클린본_20231130.mp4  → BACKUP   Title: Episode 12 (클린본)
 ```
 
-**구현**: `extract_gog_version_type()` 함수에서 우선순위 추출
+**구현**: `extract_gog_version_type()` 함수에서 우선순위 추출, 찐최종만 PRIMARY 할당
 
 ### Origin/Archive 관계
 
@@ -356,6 +355,7 @@ if era == 'CLASSIC' and event_type == 'ME':
 
 | 버전 | 날짜 | 변경 내용 |
 |------|------|----------|
+| 5.4 | 2025-12-18 | GOG 규칙 수정: 찐최종만 PRIMARY, 나머지 BACKUP + Title 버전 표기 |
 | 5.3 | 2025-12-18 | GOG 버전 우선순위 규칙 추가 (찐최종 > 최종 > 클린본) |
 | 5.2 | 2025-12-18 | Day 중복 방지 규칙 추가 (event_name에 Day 포함 시 스킵) |
 | 5.1 | 2025-12-18 | Generic Title 금지 규칙 추가, Day 추출 버그 수정 |
