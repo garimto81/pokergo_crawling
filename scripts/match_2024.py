@@ -542,13 +542,12 @@ def export_to_sheets(elements: list[NasElement]):
     """Export 2024 results to Google Sheets."""
     sheets = get_sheets_service()
 
-    # Sheet 1: 2024_Catalog - Full file catalog
-    print('\n[1/3] 2024_Catalog')
+    # 2024_Catalog - Full file catalog (same structure as 2025_Catalog)
+    print('\n[Export] 2024_Catalog')
     headers = [
-        'No', 'Entry Key', 'File Type',
-        'Category', 'Title',
-        'Region', 'Event Type', 'Event #', 'Day', 'Episode #',
-        'Buy-in', 'Game Type', 'Is Clip',
+        'No', 'Entry Key', 'Match Type', 'Role', 'Backup Type',
+        'Category', 'Title', 'PokerGO Title',
+        'Region', 'Event Type', 'Event #', 'Day', 'Part', 'RAW',
         'Size (GB)', 'Filename', 'Full Path'
     ]
     rows = [headers]
@@ -562,17 +561,18 @@ def export_to_sheets(elements: list[NasElement]):
         rows.append([
             idx,
             entry_key,
-            elem.file_type,
+            'NAS_ONLY',      # Match Type: No PokerGO matching for 2024
+            'PRIMARY',       # Role: All 2024 files are PRIMARY
+            '-',             # Backup Type: No backup versions
             category,
             title,
+            '',              # PokerGO Title: Empty for 2024
             elem.region,
             elem.event_type,
             elem.event_num or '',
             elem.day,
-            elem.episode_num or '',
-            elem.buy_in,
-            elem.game_type,
-            'Yes' if elem.is_clip else '',
+            elem.part or '',
+            '',              # RAW: No HyperDeck files
             f'{size_gb:.2f}',
             elem.filename,
             elem.full_path
@@ -580,84 +580,21 @@ def export_to_sheets(elements: list[NasElement]):
 
     write_sheet(sheets, '2024_Catalog', rows)
 
-    # Sheet 2: 2024_Summary - Summary by region and type
-    print('\n[2/3] 2024_Summary')
-    summary = defaultdict(lambda: {'total': 0, 'episodes': 0, 'clips': 0, 'size': 0})
-
+    # Print summary to console
+    print('\n  Summary:')
+    summary = defaultdict(lambda: {'total': 0, 'size': 0})
     for elem in elements:
         key = (elem.region, elem.event_type)
         summary[key]['total'] += 1
         summary[key]['size'] += elem.size_bytes
-        if elem.is_clip:
-            summary[key]['clips'] += 1
-        else:
-            summary[key]['episodes'] += 1
 
-    rows = [['Region', 'Event Type', 'Total', 'Episodes', 'Clips', 'Size (GB)']]
     for (region, event_type) in sorted(summary.keys()):
         s = summary[(region, event_type)]
         size_gb = s['size'] / (1024**3)
-        rows.append([region, event_type, s['total'], s['episodes'], s['clips'], f'{size_gb:.2f}'])
+        print(f'    {region} {event_type}: {s["total"]} files ({size_gb:.1f} GB)')
 
-    # Region totals
-    rows.append([])
-    rows.append(['=== Region Totals ===', '', '', '', '', ''])
-    region_totals = defaultdict(lambda: {'total': 0, 'episodes': 0, 'clips': 0, 'size': 0})
-    for elem in elements:
-        region_totals[elem.region]['total'] += 1
-        region_totals[elem.region]['size'] += elem.size_bytes
-        if elem.is_clip:
-            region_totals[elem.region]['clips'] += 1
-        else:
-            region_totals[elem.region]['episodes'] += 1
-
-    for region in ['LV', 'EU', 'PARADISE', 'CIRCUIT', 'OTHER']:
-        if region in region_totals:
-            t = region_totals[region]
-            size_gb = t['size'] / (1024**3)
-            rows.append([region, '', t['total'], t['episodes'], t['clips'], f'{size_gb:.2f}'])
-
-    # Grand total
-    total = len(elements)
-    total_episodes = sum(1 for e in elements if not e.is_clip)
-    total_clips = sum(1 for e in elements if e.is_clip)
     total_size = sum(e.size_bytes for e in elements) / (1024**3)
-    rows.append([])
-    rows.append(['TOTAL', '', total, total_episodes, total_clips, f'{total_size:.2f}'])
-
-    write_sheet(sheets, '2024_Summary', rows)
-
-    # Sheet 3: 2024_Episodes - Episodes only (service target)
-    print('\n[3/3] 2024_Episodes')
-    episodes = [e for e in elements if not e.is_clip]
-    headers = [
-        'No', 'Entry Key', 'Category', 'Title',
-        'Region', 'Event Type', 'Event #', 'Day', 'Episode #',
-        'Size (GB)', 'Filename'
-    ]
-    rows = [headers]
-
-    for idx, elem in enumerate(sorted(episodes, key=lambda x: (x.region, x.event_type, x.day, x.filename)), 1):
-        entry_key = generate_entry_key(elem)
-        category = generate_category(elem.region, elem.event_type, elem.event_num)
-        title = generate_title(elem)
-        size_gb = elem.size_bytes / (1024**3)
-
-        rows.append([
-            idx,
-            entry_key,
-            category,
-            title,
-            elem.region,
-            elem.event_type,
-            elem.event_num or '',
-            elem.day,
-            elem.episode_num or '',
-            f'{size_gb:.2f}',
-            elem.filename
-        ])
-
-    write_sheet(sheets, '2024_Episodes', rows)
+    print(f'    Total: {len(elements)} files ({total_size:.1f} GB)')
 
 
 # =============================================================================
