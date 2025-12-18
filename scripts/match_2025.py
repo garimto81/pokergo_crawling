@@ -219,6 +219,50 @@ def extract_day_from_path(full_path: str) -> str:
     return ''
 
 
+def extract_event_name_from_path(full_path: str) -> str:
+    """Extract event name from folder path.
+
+    Folder patterns:
+    - '2025 WSOP-EUROPE #2 KING'S MILLION FINAL' → King's Million
+    - '2025 WSOP-EUROPE #4 2K MONSTERSTACK FINAL' → 2K Monsterstack
+    - '2025 WSOP-EUROPE #5 MINI MAIN EVENT' → Mini Main Event
+    - '2025 WSOP-EUROPE #14 MAIN EVENT' → Main Event
+    """
+    if not full_path:
+        return ''
+
+    # Match event folder: "2025 WSOP-EUROPE #N <EVENT_NAME> [FINAL]"
+    match = re.search(r'2025 WSOP-EUROPE #\d+\s+(.+?)(?:\\|$)', full_path, re.I)
+    if match:
+        event_part = match.group(1).strip()
+        # Remove trailing "FINAL" if present
+        event_part = re.sub(r'\s+FINAL$', '', event_part, flags=re.I)
+        # Normalize event names
+        event_upper = event_part.upper()
+
+        if event_upper == 'MAIN EVENT':
+            return 'Main Event'
+        elif event_upper == 'MINI MAIN EVENT':
+            return 'Mini Main Event'
+        elif "KING'S MILLION" in event_upper or 'KINGS MILLION' in event_upper:
+            return "King's Million"
+        elif 'MONSTERSTACK' in event_upper:
+            return '2K Monsterstack'
+        elif 'COLOSSUS' in event_upper:
+            return 'Colossus'
+        elif 'PLO MY.BO' in event_upper or 'PLO MYSTERY' in event_upper:
+            return '10K PLO Mystery Bounty'
+        elif 'GGMILLION' in event_upper:
+            return 'GGMillion€'
+        elif '2K PLO' in event_upper:
+            return '2K PLO'
+        else:
+            # Return cleaned version
+            return event_part.title()
+
+    return ''
+
+
 def extract_table(title: str) -> str:
     """Extract table from PokerGO title (Table B Only, Table C Only)."""
     match = re.search(r'Table\s+([A-C])\s+Only', title, re.I)
@@ -578,6 +622,9 @@ def load_nas_files(db) -> list[NasElement]:
         # Extract event_type with region and event_num for proper EU handling
         event_type = extract_event_type(f.full_path, f.filename, event_num, region)
         event_name = extract_event_name(f.filename)
+        # Fallback: extract event name from folder path (for EU files)
+        if not event_name and region == 'EU':
+            event_name = extract_event_name_from_path(f.full_path)
         day = extract_day(f.filename)
         # Fallback: extract Day from path folder (for NC files)
         if not day:

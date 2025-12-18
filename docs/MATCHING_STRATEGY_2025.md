@@ -1,6 +1,6 @@
 # 2025 매칭 전략
 
-**버전**: 1.3
+**버전**: 1.4
 **날짜**: 2025-12-18
 
 ---
@@ -526,6 +526,33 @@ Cyprus 이벤트별 Entry Key 생성:
 | Day from path | `\Day X\` 또는 `\Day X Y\` | 파일명에 Day 없을 때 |
 | Part from suffix | `-XXX.mp4` | NC 파일만 |
 
+### 8.6 이벤트명 폴더 추출 (EU) ★ v1.4
+
+EU 파일의 경우 파일명에 이벤트명이 없을 때 (HyperDeck RAW 등) 폴더 경로에서 추출:
+
+**폴더 패턴:**
+```
+Z:\...\2025 WSOP-EUROPE #2 KING'S MILLION FINAL\...
+                        ^^^^^^^^^^^^^^^^^^
+                        이벤트명 추출
+```
+
+**매핑 테이블:**
+| 폴더 이벤트명 | 정규화 결과 |
+|---------------|-------------|
+| `KING'S MILLION` | King's Million |
+| `2K MONSTERSTACK` | 2K Monsterstack |
+| `MINI MAIN EVENT` | Mini Main Event |
+| `MAIN EVENT` | Main Event |
+| `COLOSSUS` | Colossus |
+| `10K PLO MY.BO` | 10K PLO Mystery Bounty |
+| `GGMILLION€` | GGMillion€ |
+| `2K PLO` | 2K PLO |
+
+**적용 조건:**
+- Region = EU
+- 파일명에서 이벤트명 추출 실패 (HyperDeck 파일 등)
+
 ---
 
 ## 변경 이력
@@ -536,3 +563,4 @@ Cyprus 이벤트별 Entry Key 생성:
 | 1.1 | 2025-12-18 | Google Sheets 출력 형식 추가 (Section 7) |
 | 1.2 | 2025-12-18 | 정규화 규칙 추가: Final Table/Day 분리, EU Bracelet 분류, NC/STREAM 버전, Cyprus Entry Key |
 | 1.3 | 2025-12-18 | 경로 기반 추출 추가: Day 폴더, NC 파일 Part 접미사 (-XXX) |
+| 1.4 | 2025-12-18 | EU 이벤트명 폴더 추출 추가: HyperDeck 등 파일명 없는 경우 경로에서 이벤트명 추출 |
