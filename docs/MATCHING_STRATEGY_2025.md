@@ -1,6 +1,6 @@
 # 2025 매칭 전략
 
-**버전**: 1.2
+**버전**: 1.3
 **날짜**: 2025-12-18
 
 ---
@@ -503,6 +503,29 @@ Cyprus 이벤트별 Entry Key 생성:
 | Luxon Pay Grand Final | `LUXON` | `MPP_2025_LUXON_D1C` |
 | MPP Main Event | `ME` | `MPP_2025_ME_D3_S1` |
 
+### 8.5 경로 기반 추출 (Path-based Extraction) ★ v1.3
+
+파일명에 정보가 없을 때 경로에서 추출:
+
+**Day 폴더 추출:**
+```
+경로: ...\NO COMMENTARY WITH GRAPHICS VER\Day 3\filename.mp4
+                                         ^^^^^
+                                         Day 3 추출
+```
+
+**Part 접미사 추출 (NC 파일):**
+```
+파일명: 🏆€10,350 WSOPE MAIN EVENT... - Day 3 👑-003.mp4
+                                           ^^^^
+                                           Part 3 추출
+```
+
+| 추출 대상 | 패턴 | 적용 조건 |
+|-----------|------|-----------|
+| Day from path | `\Day X\` 또는 `\Day X Y\` | 파일명에 Day 없을 때 |
+| Part from suffix | `-XXX.mp4` | NC 파일만 |
+
 ---
 
 ## 변경 이력
@@ -512,3 +535,4 @@ Cyprus 이벤트별 Entry Key 생성:
 | 1.0 | 2025-12-18 | 초기 문서 작성 |
 | 1.1 | 2025-12-18 | Google Sheets 출력 형식 추가 (Section 7) |
 | 1.2 | 2025-12-18 | 정규화 규칙 추가: Final Table/Day 분리, EU Bracelet 분류, NC/STREAM 버전, Cyprus Entry Key |
+| 1.3 | 2025-12-18 | 경로 기반 추출 추가: Day 폴더, NC 파일 Part 접미사 (-XXX) |

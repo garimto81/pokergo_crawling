@@ -181,12 +181,42 @@ def extract_day(filename: str) -> str:
     return ''
 
 
-def extract_part(filename: str) -> int | None:
-    """Extract part number."""
+def extract_part(filename: str, full_path: str = '') -> int | None:
+    """Extract part number.
+
+    Patterns:
+    - 'Part 1', 'Part1' → 1
+    - '-003.mp4' suffix (NC files) → 3
+    """
+    # Pattern 1: "Part X"
     match = re.search(r'Part\s*(\d+)', filename, re.I)
     if match:
         return int(match.group(1))
+
+    # Pattern 2: "-XXX.mp4" suffix (NC version files)
+    # Only apply to NC files to avoid false positives
+    if 'NO COMMENTARY' in (full_path or '').upper():
+        match = re.search(r'-(\d{3})\.mp4$', filename)
+        if match:
+            return int(match.group(1))
+
     return None
+
+
+def extract_day_from_path(full_path: str) -> str:
+    """Extract Day from folder path (e.g., '\\Day 3\\').
+
+    Used for NC files where Day info is in folder name, not filename.
+    """
+    if not full_path:
+        return ''
+    # Match "Day X" or "Day X Y" folder (e.g., "Day 1 A", "Day 3")
+    match = re.search(r'\\Day\s*(\d+)\s*([A-D])?\\', full_path, re.I)
+    if match:
+        day = match.group(1)
+        suffix = match.group(2) or ''
+        return f'{day}{suffix}'
+    return ''
 
 
 def extract_table(title: str) -> str:
@@ -549,7 +579,10 @@ def load_nas_files(db) -> list[NasElement]:
         event_type = extract_event_type(f.full_path, f.filename, event_num, region)
         event_name = extract_event_name(f.filename)
         day = extract_day(f.filename)
-        part = extract_part(f.filename)
+        # Fallback: extract Day from path folder (for NC files)
+        if not day:
+            day = extract_day_from_path(f.full_path)
+        part = extract_part(f.filename, f.full_path)
         raw = is_hyperdeck(f.filename)
 
         # HyperDeck path extraction
