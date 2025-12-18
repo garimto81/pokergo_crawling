@@ -19,7 +19,7 @@ sheets = service.spreadsheets()
 print('Titles with generic Event names:')
 print('=' * 60)
 
-for sheet in ['2024_Catalog', '2025_Catalog']:
+for sheet in ['2023_Catalog', '2024_Catalog', '2025_Catalog']:
     result = sheets.values().get(spreadsheetId=GOOGLE_SHEETS_ID, range=f'{sheet}!G2:G200').execute()
     titles = [r[0] for r in result.get('values', []) if r]
 
