@@ -2,7 +2,7 @@
 
 NAS 파일과 PokerGO 콘텐츠 매칭 및 Asset Grouping 규칙 정의서.
 
-**Version**: 5.4 | **Date**: 2025-12-18
+**Version**: 5.5 | **Date**: 2025-12-18
 
 > 상세 패턴 예시 및 변경 이력: [MATCHING_PATTERNS_DETAIL.md](MATCHING_PATTERNS_DETAIL.md)
 
@@ -203,27 +203,35 @@ def get_era(year: int) -> str:
 
 ### GOG (Game of Gold) 버전 우선순위
 
-> **2023 GOG 파일 전용 규칙. 찐최종만 PRIMARY, 나머지는 모두 BACKUP.**
+> **2023 GOG 파일 전용 규칙. 각 에피소드에서 최고 우선순위 버전 1개 = PRIMARY.**
 
-| 우선순위 | 버전 키워드 | Role | Title 표기 |
-|---------|------------|------|-----------|
-| 4 (최고) | `찐최종` | **PRIMARY** | (찐최종) |
-| 3 | `최종` | BACKUP | (최종) |
-| 2 | (표기없음) | BACKUP | (작업본) |
-| 1 (최저) | `클린본` | BACKUP | (클린본) |
+| 우선순위 | 버전 키워드 | 설명 |
+|---------|------------|------|
+| 4 (최고) | `찐최종` | 최종 확정본 |
+| 3 | `최종` | 최종본 |
+| 2 | (표기없음) | 작업본 |
+| 1 (최저) | `클린본` | 클린 버전 |
+
+**Role 결정**:
+- 각 에피소드별 최고 우선순위 1개 = **PRIMARY** (Title: `Episode X`)
+- 나머지 = **BACKUP** (Title: `Episode X (버전)`)
 
 **적용 예시**:
 ```
-Episode 11:
-  ★ E11_GOG_final_edit_20231203_찐최종.mp4  → PRIMARY  Title: Episode 11 (찐최종)
+Episode 11:  (찐최종 보유)
+  ★ E11_GOG_final_edit_20231203_찐최종.mp4  → PRIMARY  Title: Episode 11
     E11_GOG_final_edit_클린본_20231201.mp4  → BACKUP   Title: Episode 11 (클린본)
 
-Episode 12:  (찐최종 없음 → 모두 BACKUP)
-    E12_GOG_final_edit_20231206_최종.mp4    → BACKUP   Title: Episode 12 (최종)
-    E12_GOG_final_edit_클린본_20231130.mp4  → BACKUP   Title: Episode 12 (클린본)
+Episode 2:  (최종이 최고 우선순위)
+  ★ E02_GOG_final_edit_20231113_최종.mp4    → PRIMARY  Title: Episode 2
+    E02_GOG_final_edit_클린본_20231031.mp4  → BACKUP   Title: Episode 2 (클린본)
+
+Episode 1:  (작업본이 최고 우선순위)
+  ★ E01_GOG_final_edit_231106.mp4          → PRIMARY  Title: Episode 1
+    E01_GOG_final_edit_클린본.mp4           → BACKUP   Title: Episode 1 (클린본)
 ```
 
-**구현**: `extract_gog_version_type()` 함수에서 우선순위 추출, 찐최종만 PRIMARY 할당
+**구현**: 에피소드별 그룹화 후 최고 우선순위 선택
 
 ### Origin/Archive 관계
 
@@ -355,6 +363,7 @@ if era == 'CLASSIC' and event_type == 'ME':
 
 | 버전 | 날짜 | 변경 내용 |
 |------|------|----------|
+| 5.5 | 2025-12-18 | GOG 규칙: 에피소드별 최고 우선순위 = PRIMARY (12개 에피소드 각 1개) |
 | 5.4 | 2025-12-18 | GOG 규칙 수정: 찐최종만 PRIMARY, 나머지 BACKUP + Title 버전 표기 |
 | 5.3 | 2025-12-18 | GOG 버전 우선순위 규칙 추가 (찐최종 > 최종 > 클린본) |
 | 5.2 | 2025-12-18 | Day 중복 방지 규칙 추가 (event_name에 Day 포함 시 스킵) |

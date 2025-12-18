@@ -256,10 +256,25 @@ def load_nas_files(db) -> list[NasElement]:
             version_type=version_type
         ))
 
-    # Assign GOG roles: Only 찐최종 is PRIMARY, all others are BACKUP
+    # Assign GOG roles: Highest priority per episode = PRIMARY, rest = BACKUP
+    # Priority: 찐최종(4) > 최종(3) > 작업본(2) > 클린본(1)
+    gog_by_episode = defaultdict(list)
     for elem in elements:
-        if elem.content_type == 'GOG':
-            if elem.version_type == '찐최종':
+        if elem.content_type == 'GOG' and elem.episode_num:
+            gog_by_episode[elem.episode_num].append(elem)
+
+    for episode_num, ep_files in gog_by_episode.items():
+        # Get priority for each file
+        def get_priority(elem):
+            _, priority = extract_gog_version_type(elem.filename)
+            return priority
+
+        # Sort by priority descending
+        ep_files.sort(key=get_priority, reverse=True)
+
+        # Highest priority = PRIMARY, rest = BACKUP
+        for i, elem in enumerate(ep_files):
+            if i == 0:
                 elem.role = 'PRIMARY'
             else:
                 elem.role = 'BACKUP'
