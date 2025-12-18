@@ -142,8 +142,9 @@ def extract_day(filename: str) -> str:
     if match:
         return f'{match.group(1)}{match.group(2)}{match.group(3)}{match.group(4)}'
 
-    # Day N[A-D] (standard)
-    match = re.search(r'Day\s*(\d+)\s*([A-D])?', filename, re.I)
+    # Day N[A-D] (standard) - A-D suffix must be followed by space, underscore, or end
+    # to avoid matching "B" from "BRACELET" in "DAY 2   BRACELET"
+    match = re.search(r'Day\s*(\d+)([A-D])?(?=\s|_|$|\.)', filename, re.I)
     if match:
         return f'{match.group(1)}{match.group(2) or ""}'
 
@@ -239,6 +240,8 @@ def extract_part(filename: str) -> int | None:
 
 def extract_event_name(filename: str, full_path: str) -> str:
     """Extract event name from filename or path."""
+    f = filename.upper()
+
     # X: drive style: Event #1 $5K Champions Reunion (Part 1)
     match = re.search(r'Event\s*#\d+\s+(\$[\d.]+K\s+.+?)(?:\s*\(Part|\s*\.mp4|$)', filename, re.I)
     if match:
@@ -251,14 +254,16 @@ def extract_event_name(filename: str, full_path: str) -> str:
         name_part = match.group(2).replace('-', ' ').title()
         return f'${buy_in.upper()} {name_part}'
 
-    # EU: Extract from folder
-    if 'DIAMOND HIGH ROLLER' in filename.upper():
-        return '50K Diamond High Roller'
-    if 'MAIN EVENT' in filename.upper():
+    # EU: Extract specific event names
+    if '50K DIAMOND HIGH ROLLER' in f or 'DIAMOND HIGH ROLLER' in f:
+        return '€50K Diamond High Roller'
+    if 'NLH MAIN EVENT' in f or 'NLH_MAIN EVENT' in f:
+        return 'NLH Main Event'
+    if 'MAIN EVENT' in f and 'NLH' not in f:
         return 'Main Event'
 
     # PARADISE: Super Main Event
-    if 'SUPER MAIN EVENT' in filename.upper():
+    if 'SUPER MAIN EVENT' in f:
         return 'Super Main Event'
 
     # CIRCUIT: Extract event name
@@ -395,7 +400,12 @@ def generate_title(elem: NasElement) -> str:
             if elem.part:
                 title += f' Part {elem.part}'
         else:
-            title = 'Bracelet Event'
+            # No event number - use specific event name (never generic "Bracelet Event")
+            if elem.event_name:
+                title = elem.event_name
+            else:
+                # Fallback to filename prefix
+                title = elem.filename[:40].replace('.mp4', '').replace('.mov', '')
             if day_display:
                 title += f' | {day_display}'
             if elem.part:
@@ -412,10 +422,16 @@ def generate_title(elem: NasElement) -> str:
             elif day_display:
                 title += f' {day_display}'
         else:
-            if elem.event_num:
+            # Event number + event name OR specific event name (never generic "Bracelet Event")
+            if elem.event_num and elem.event_name:
+                title = f'Event #{elem.event_num} {elem.event_name}'
+            elif elem.event_num:
                 title = f'Event #{elem.event_num}'
+            elif elem.event_name:
+                title = elem.event_name
             else:
-                title = 'Bracelet Event'
+                # Fallback to filename prefix
+                title = elem.filename[:40].replace('.mp4', '').replace('.mov', '')
             if day_display:
                 title += f' | {day_display}'
         return title
