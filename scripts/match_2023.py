@@ -40,6 +40,8 @@ class NasElement:
     episode_num: int | None
     part: int | None
     size_bytes: int
+    role: str = 'PRIMARY'        # PRIMARY or BACKUP
+    version_type: str = ''       # 찐최종, 최종, 클린본, or empty
 
 
 # =============================================================================
@@ -105,6 +107,24 @@ def extract_part(filename: str) -> int | None:
     if match:
         return int(match.group(1))
     return None
+
+
+def extract_gog_version_type(filename: str) -> tuple[str, int]:
+    """Extract GOG version type and priority.
+
+    Priority (higher = better):
+    - 찐최종: 3 (highest)
+    - 최종: 2
+    - 클린본: 1
+    - 기타: 0 (lowest)
+    """
+    if '찐최종' in filename:
+        return ('찐최종', 3)
+    elif '최종' in filename and '찐최종' not in filename:
+        return ('최종', 2)
+    elif '클린본' in filename:
+        return ('클린본', 1)
+    return ('', 0)
 
 
 # =============================================================================
@@ -210,6 +230,9 @@ def load_nas_files(db) -> list[NasElement]:
         else:
             event_type = 'OTHER'
 
+        # Extract GOG version type
+        version_type, _ = extract_gog_version_type(f.filename) if content_type == 'GOG' else ('', 0)
+
         elements.append(NasElement(
             file_id=f.id,
             full_path=f.full_path or '',
@@ -221,8 +244,31 @@ def load_nas_files(db) -> list[NasElement]:
             event_name=event_name,
             episode_num=episode_num,
             part=part,
-            size_bytes=f.size_bytes or 0
+            size_bytes=f.size_bytes or 0,
+            role='PRIMARY',  # Will be updated for GOG
+            version_type=version_type
         ))
+
+    # Assign GOG roles based on version priority
+    # Group GOG files by episode
+    gog_by_episode = defaultdict(list)
+    for elem in elements:
+        if elem.content_type == 'GOG' and elem.episode_num:
+            gog_by_episode[elem.episode_num].append(elem)
+
+    # For each episode, find highest priority and assign roles
+    for episode_num, ep_files in gog_by_episode.items():
+        # Get priority for each file
+        priorities = [(elem, extract_gog_version_type(elem.filename)[1]) for elem in ep_files]
+        # Sort by priority descending
+        priorities.sort(key=lambda x: x[1], reverse=True)
+
+        # Highest priority file is PRIMARY, rest are BACKUP
+        for i, (elem, priority) in enumerate(priorities):
+            if i == 0:
+                elem.role = 'PRIMARY'
+            else:
+                elem.role = 'BACKUP'
 
     return elements
 
@@ -300,8 +346,8 @@ def export_to_sheets(elements: list[NasElement]):
             idx,
             entry_key,
             'NAS_ONLY',      # Match Type
-            'PRIMARY',       # Role
-            '-',             # Backup Type
+            elem.role,       # Role (PRIMARY or BACKUP for GOG)
+            elem.version_type or '-',  # Backup Type (version type for GOG)
             category,
             title,
             '',              # PokerGO Title
