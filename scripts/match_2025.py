@@ -107,26 +107,48 @@ def extract_event_type(full_path: str, filename: str, event_num: int | None = No
             else:
                 return 'BR'  # All other numbered events are Bracelet Events
 
+    # CIRCUIT region: check for Main Event in filename
+    if region == 'CIRCUIT' or 'CIRCUIT' in p:
+        if 'MAIN EVENT' in f or '- MAIN EVENT' in p:
+            return 'ME'
+        # Other CIRCUIT events are side events
+        return 'BR'
+
     # General logic
     if 'MAIN EVENT' in p or 'MAIN EVENT' in f:
         return 'ME'
     elif 'BRACELET' in p or 'SIDE EVENT' in p or 'EVENT #' in f or 'WSOPE #' in f:
+        return 'BR'
+    # LV 2024: -be- means Bracelet Event
+    elif '-be-' in f.lower():
         return 'BR'
     return 'OTHER'
 
 
 def extract_event_num(text: str) -> int | None:
     """Extract event number from text."""
+    # Pattern 1: Event #N (standard)
     match = re.search(r'Event\s*#(\d+)', text, re.I)
     if match:
         return int(match.group(1))
+    # Pattern 2: WSOPE #N
     match = re.search(r'WSOPE\s*#(\d+)', text, re.I)
     if match:
         return int(match.group(1))
+    # Pattern 3: WSOP-EUROPE #N
     match = re.search(r'WSOP-EUROPE\s*#(\d+)', text, re.I)
     if match:
         return int(match.group(1))
+    # Pattern 4: [BRACELET EVENT #N]
     match = re.search(r'\[BRACELET(?:\s+EVENT)?\s*#(\d+)\]', text, re.I)
+    if match:
+        return int(match.group(1))
+    # Pattern 5: ev-NN (LV 2024 style: wsop-2024-be-ev-01)
+    match = re.search(r'-ev-(\d+)', text, re.I)
+    if match:
+        return int(match.group(1))
+    # Pattern 6: BRACELET EVENT #N (without brackets)
+    match = re.search(r'BRACELET\s+EVENT\s*#(\d+)', text, re.I)
     if match:
         return int(match.group(1))
     return None
@@ -161,6 +183,9 @@ def extract_day(filename: str) -> str:
     # Final Table / FT → 'FT' (마지막 1 테이블)
     if 'Final Table' in filename:
         return 'FT'
+    # -ft- pattern (LV 2024 style: wsop-2024-be-ev-01-ft-...)
+    if '-ft-' in filename.lower():
+        return 'FT'
     # Final Day → 'FinalDay' (마지막 날, 여러 테이블 가능)
     if 'Final Day' in filename:
         return 'FinalDay'
@@ -174,12 +199,30 @@ def extract_day(filename: str) -> str:
         if match.group(4):
             parts.append(match.group(4))
         return f'{day}{"".join(parts)}'  # 2ABC
-    # Day N[A-D]
+    # Day N[A-D] (standard)
     match = re.search(r'Day\s*(\d+)\s*([A-D])?', filename, re.I)
     if match:
         day = match.group(1)
         suffix = match.group(2) or ''
         return f'{day}{suffix}'
+    # [Day N[A-D]] (CIRCUIT 2024 bracket style)
+    match = re.search(r'\[Day\s*(\d+)\s*([A-D])?\]', filename, re.I)
+    if match:
+        day = match.group(1)
+        suffix = match.group(2) or ''
+        return f'{day}{suffix}'
+    # dayNN (LV 2024 lowercase: -day02-)
+    match = re.search(r'-day(\d+)', filename, re.I)
+    if match:
+        return match.group(1)
+    # WE24-ME-NN (EU 2024 episode style) → Episode as Day
+    match = re.search(r'WE24-ME-(\d+)', filename, re.I)
+    if match:
+        return f'EP{match.group(1)}'
+    # WCLA24-NN (CIRCUIT 2024 episode style) → Episode as Day
+    match = re.search(r'WCLA24-(\d+)', filename, re.I)
+    if match:
+        return f'EP{match.group(1)}'
     return ''
 
 

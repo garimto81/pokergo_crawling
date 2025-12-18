@@ -3,8 +3,9 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
-from ..database import get_db, NasFile, AssetGroup, Region, EventType
+from ..database import get_db, NasFile, AssetGroup, Region, EventType, PokergoEpisode
 from ..schemas import OverviewStats, YearStats, RegionStats
+from ..services.matching import get_matching_summary
 
 router = APIRouter()
 
@@ -149,4 +150,81 @@ async def get_unclassified_stats(db: Session = Depends(get_db)):
         "unknown_type": unk_count,
         "no_year": no_year,
         "no_episode": no_episode,
+    }
+
+
+@router.get("/matching-summary")
+async def get_matching_summary_stats(db: Session = Depends(get_db)):
+    """Get 4-category matching summary.
+
+    Returns:
+        {
+            "total_nas_groups": 716,
+            "total_pokergo_episodes": 1095,
+            "MATCHED": 409,
+            "NAS_ONLY_HISTORIC": 307,
+            "NAS_ONLY_MODERN": 0,
+            "POKERGO_ONLY": 957
+        }
+    """
+    return get_matching_summary(db)
+
+
+@router.get("/sync-status")
+async def get_sync_status(db: Session = Depends(get_db)):
+    """Get Origin/Archive sync status.
+
+    Returns folder distribution and role conflicts.
+    """
+    # Get all files with their directories
+    files = db.query(NasFile).all()
+
+    origin_count = 0
+    archive_count = 0
+    origin_primary = 0
+    archive_primary = 0
+
+    for f in files:
+        directory = (f.directory or "").lower()
+        full_path = (f.full_path or "").lower()
+
+        is_archive = "archive" in directory or "z:/archive" in full_path
+        is_origin = "origin" in directory or "y:/wsop" in full_path
+
+        if is_archive:
+            archive_count += 1
+            if f.role == "primary":
+                archive_primary += 1
+        elif is_origin:
+            origin_count += 1
+            if f.role == "primary":
+                origin_primary += 1
+
+    # Count shared groups (groups with files from both origin and archive)
+    from collections import defaultdict
+    group_folders = defaultdict(lambda: {"origin": 0, "archive": 0})
+    for f in files:
+        if f.asset_group_id:
+            directory = (f.directory or "").lower()
+            full_path = (f.full_path or "").lower()
+            is_archive = "archive" in directory or "z:/archive" in full_path
+
+            if is_archive:
+                group_folders[f.asset_group_id]["archive"] += 1
+            else:
+                group_folders[f.asset_group_id]["origin"] += 1
+
+    shared_groups = sum(1 for g in group_folders.values() if g["origin"] > 0 and g["archive"] > 0)
+    origin_only_groups = sum(1 for g in group_folders.values() if g["origin"] > 0 and g["archive"] == 0)
+    archive_only_groups = sum(1 for g in group_folders.values() if g["origin"] == 0 and g["archive"] > 0)
+
+    return {
+        "origin_files": origin_count,
+        "archive_files": archive_count,
+        "origin_primary": origin_primary,
+        "archive_primary": archive_primary,
+        "shared_groups": shared_groups,
+        "origin_only_groups": origin_only_groups,
+        "archive_only_groups": archive_only_groups,
+        "has_role_conflict": archive_primary > 0,
     }

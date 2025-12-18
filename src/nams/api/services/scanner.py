@@ -5,9 +5,10 @@ from pathlib import Path
 from datetime import datetime
 from dataclasses import dataclass
 from enum import Enum
+from typing import Optional
 from sqlalchemy.orm import Session
 
-from ..database import NasFile, AssetGroup, get_db_context
+from ..database import NasFile, AssetGroup, ExclusionRule, get_db_context
 
 
 class ScanMode(str, Enum):
@@ -20,20 +21,105 @@ class FolderType(str, Enum):
     """NAS folder type."""
     ORIGIN = "origin"
     ARCHIVE = "archive"
-    BOTH = "both"
+    POKERGO = "pokergo"  # X: PokerGO source
+    BOTH = "both"  # Origin + Archive
+    ALL = "all"  # Origin + Archive + PokerGO
 
 
 @dataclass
 class ScanConfig:
     """Scan configuration."""
-    origin_path: str = "Y:/WSOP Backup"
-    archive_path: str = "Z:/archive"
+    origin_path: str = "Y:/WSOP backup"
+    archive_path: str = "Z:/"
+    pokergo_path: str = "X:/GGP Footage/POKERGO"  # PokerGO source
     mode: ScanMode = ScanMode.INCREMENTAL
     folder_type: FolderType = FolderType.BOTH
 
 
 # Video extensions
 VIDEO_EXTENSIONS = {'.mp4', '.mkv', '.mov', '.avi', '.wmv', '.m4v', '.mxf'}
+
+
+@dataclass
+class ExclusionCheckResult:
+    """Result of exclusion check."""
+    excluded: bool
+    reason: Optional[str] = None
+    rule_id: Optional[int] = None
+
+
+def get_active_exclusion_rules(db: Session) -> list[ExclusionRule]:
+    """Get all active exclusion rules from database."""
+    return db.query(ExclusionRule).filter(ExclusionRule.is_active == True).all()
+
+
+def check_exclusion_rules(
+    rules: list[ExclusionRule],
+    filename: str,
+    size_bytes: int,
+    full_path: str,
+    duration_sec: Optional[int] = None
+) -> ExclusionCheckResult:
+    """Check if a file should be excluded based on active rules.
+
+    Args:
+        rules: List of active exclusion rules
+        filename: File name
+        size_bytes: File size in bytes
+        full_path: Full path for keyword matching
+        duration_sec: Optional duration in seconds (if available)
+
+    Returns:
+        ExclusionCheckResult with excluded status and reason
+    """
+    filename_lower = filename.lower()
+    full_path_lower = full_path.lower()
+
+    for rule in rules:
+        # Size rules
+        if rule.rule_type == "size":
+            threshold = int(rule.value)
+            if rule.operator == "lt" and size_bytes < threshold:
+                return ExclusionCheckResult(
+                    excluded=True,
+                    reason=f"Size {size_bytes:,} bytes < {threshold:,} bytes",
+                    rule_id=rule.id
+                )
+            elif rule.operator == "gt" and size_bytes > threshold:
+                return ExclusionCheckResult(
+                    excluded=True,
+                    reason=f"Size {size_bytes:,} bytes > {threshold:,} bytes",
+                    rule_id=rule.id
+                )
+
+        # Duration rules (only if duration is available)
+        elif rule.rule_type == "duration" and duration_sec is not None:
+            threshold = int(rule.value)
+            if rule.operator == "lt" and duration_sec < threshold:
+                return ExclusionCheckResult(
+                    excluded=True,
+                    reason=f"Duration {duration_sec}s < {threshold}s",
+                    rule_id=rule.id
+                )
+            elif rule.operator == "gt" and duration_sec > threshold:
+                return ExclusionCheckResult(
+                    excluded=True,
+                    reason=f"Duration {duration_sec}s > {threshold}s",
+                    rule_id=rule.id
+                )
+
+        # Keyword rules (check both filename and full path)
+        elif rule.rule_type == "keyword":
+            keyword_lower = rule.value.lower()
+            if rule.operator == "contains":
+                if keyword_lower in filename_lower or keyword_lower in full_path_lower:
+                    return ExclusionCheckResult(
+                        excluded=True,
+                        reason=f"Contains keyword '{rule.value}'",
+                        rule_id=rule.id
+                    )
+
+    return ExclusionCheckResult(excluded=False)
 
 
 def parse_filename(filepath: Path) -> dict:
@@ -124,16 +210,19 @@ def run_scan(config: ScanConfig) -> dict:
         "folder_type": config.folder_type.value,
         "origin_files": 0,
         "archive_files": 0,
+        "pokergo_files": 0,
         "new_files": 0,
         "skipped_files": 0,
+        "excluded_files": 0,
         "total_size_bytes": 0,
         "errors": [],
+        "exclusion_reasons": [],
     }
 
     all_files = []
 
     # Scan origin folder
-    if config.folder_type in (FolderType.ORIGIN, FolderType.BOTH):
+    if config.folder_type in (FolderType.ORIGIN, FolderType.BOTH, FolderType.ALL):
         origin_path = Path(config.origin_path)
         if origin_path.exists():
             print(f"[Scan] Scanning origin: {origin_path}")
@@ -147,7 +236,7 @@ def run_scan(config: ScanConfig) -> dict:
             stats["errors"].append(f"Origin path not found: {origin_path}")
 
     # Scan archive folder
-    if config.folder_type in (FolderType.ARCHIVE, FolderType.BOTH):
+    if config.folder_type in (FolderType.ARCHIVE, FolderType.BOTH, FolderType.ALL):
         archive_path = Path(config.archive_path)
         if archive_path.exists():
             print(f"[Scan] Scanning archive: {archive_path}")
@@ -159,6 +248,20 @@ def run_scan(config: ScanConfig) -> dict:
             print(f"  Found {len(archive_files)} files")
         else:
             stats["errors"].append(f"Archive path not found: {archive_path}")
+
+    # Scan PokerGO source folder
+    if config.folder_type in (FolderType.POKERGO, FolderType.ALL):
+        pokergo_path = Path(config.pokergo_path)
+        if pokergo_path.exists():
+            print(f"[Scan] Scanning PokerGO source: {pokergo_path}")
+            pokergo_files = scan_directory(pokergo_path, "pokergo")
+            for f in pokergo_files:
+                f["source_folder"] = "pokergo"
+            all_files.extend(pokergo_files)
+            stats["pokergo_files"] = len(pokergo_files)
+            print(f"  Found {len(pokergo_files)} files")
+        else:
+            stats["errors"].append(f"PokerGO path not found: {pokergo_path}")
 
     # Save to database
     with get_db_context() as db:
@@ -173,15 +276,39 @@ def run_scan(config: ScanConfig) -> dict:
             db.query(NasFile).delete()
             db.commit()
 
+        # Get active exclusion rules
+        exclusion_rules = get_active_exclusion_rules(db)
+        print(f"[Scan] Active exclusion rules: {len(exclusion_rules)}")
+
         for file_data in all_files:
             full_path = file_data.get("full_path")
+            filename = file_data["filename"]
+            size_bytes = file_data["size_bytes"]
 
             # Skip existing files in incremental mode
             if config.mode == ScanMode.INCREMENTAL and full_path in existing_paths:
                 stats["skipped_files"] += 1
                 continue
 
-            # Create new file record
+            # Check exclusion rules (for flagging, not skipping)
+            exclusion_result = check_exclusion_rules(
+                rules=exclusion_rules,
+                filename=filename,
+                size_bytes=size_bytes,
+                full_path=full_path,
+                duration_sec=None  # Duration not available from file scan
+            )
+
+            # Determine role based on source folder
+            source_folder = file_data["source_folder"]
+            if source_folder == "origin":
+                role = "primary"
+            elif source_folder == "pokergo":
+                role = "pokergo_source"
+            else:
+                role = "backup"
+
+            # Create new file record (ALL files are stored, excluded ones are flagged)
             nas_file = NasFile(
                 filename=file_data["filename"],
                 extension=file_data["extension"],
@@ -189,14 +316,27 @@ def run_scan(config: ScanConfig) -> dict:
                 directory=file_data["directory"],
                 full_path=full_path,
                 year=file_data.get("year"),
-                role="primary" if file_data["source_folder"] == "origin" else "backup",
+                role=role,
+                # Exclusion flags (checkbox display)
+                is_excluded=exclusion_result.excluded,
+                exclusion_reason=exclusion_result.reason if exclusion_result.excluded else None,
+                exclusion_rule_id=exclusion_result.rule_id if exclusion_result.excluded else None,
             )
             db.add(nas_file)
             stats["new_files"] += 1
             stats["total_size_bytes"] += file_data["size_bytes"]
 
+            if exclusion_result.excluded:
+                stats["excluded_files"] += 1
+                if len(stats["exclusion_reasons"]) < 10:
+                    stats["exclusion_reasons"].append({
+                        "file": filename,
+                        "reason": exclusion_result.reason
+                    })
+
         db.commit()
 
+    print(f"[Scan] Flagged {stats['excluded_files']} files as excluded (stored with is_excluded=True)")
     return stats
 
 

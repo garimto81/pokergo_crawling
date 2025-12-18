@@ -27,6 +27,8 @@ class AssetGroupUpdate(BaseModel):
     pokergo_episode_id: Optional[str] = None
     pokergo_title: Optional[str] = None
     pokergo_match_score: Optional[float] = None
+    catalog_title: Optional[str] = None
+    catalog_title_manual: Optional[bool] = None
 
 
 class AssetGroupResponse(AssetGroupBase):
@@ -35,6 +37,9 @@ class AssetGroupResponse(AssetGroupBase):
     pokergo_episode_id: Optional[str] = None
     pokergo_title: Optional[str] = None
     pokergo_match_score: Optional[float] = None
+    catalog_title: Optional[str] = None
+    catalog_title_manual: bool = False
+    match_category: Optional[str] = None  # MATCHED, NAS_ONLY_HISTORIC, NAS_ONLY_MODERN
     file_count: int = 0
     total_size_bytes: int = 0
     has_backup: bool = False
@@ -58,6 +63,8 @@ class AssetGroupListResponse(BaseModel):
     region_code: Optional[str] = None
     event_type_code: Optional[str] = None
     episode: Optional[int] = None
+    catalog_title: Optional[str] = None
+    match_category: Optional[str] = None  # MATCHED, NAS_ONLY_HISTORIC, NAS_ONLY_MODERN
     file_count: int = 0
     total_size_formatted: str = "0 B"
     has_backup: bool = False

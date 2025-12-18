@@ -2,7 +2,7 @@
 
 NAS 파일과 PokerGO 콘텐츠 매칭 및 Asset Grouping 규칙 정의서.
 
-**Version**: 5.5 | **Date**: 2025-12-18
+**Version**: 5.11 | **Date**: 2025-12-18
 
 > 상세 패턴 예시 및 변경 이력: [MATCHING_PATTERNS_DETAIL.md](MATCHING_PATTERNS_DETAIL.md)
 
@@ -145,6 +145,22 @@ def get_era(year: int) -> str:
 
 **구현**: `generate_title()` 함수에서 generic fallback 제거, Day 중복 체크
 
+### 바이인 없는 이벤트 처리
+
+> **Tournament of Champions 등 초청 이벤트는 바이인($) 없이 이벤트명만 존재**
+
+| 케이스 | 예시 파일명 | 추출 결과 |
+|--------|-------------|----------|
+| 바이인 있음 | `Event #44 - $10,000 H.O.R.S.E. Championship` | `$10,000 H.O.R.S.E. Championship` |
+| 바이인 없음 | `Event #89 - WSOP Tournament of Champions` | `WSOP Tournament of Champions` |
+
+**구현**: 바이인 금액(`$XXX`)을 선택적(optional) 패턴으로 처리
+
+```python
+# $ 금액은 선택적 - Tournament of Champions 등 처리
+r'Event #\d+\s*-\s*((?:\$[\d,.]+[KM]?\s+)?.+?)(?:\s+Final Table|\.mp4|$)'
+```
+
 ---
 
 ## 5. Region
@@ -172,6 +188,31 @@ def get_era(year: int) -> str:
 | **CYPRUS** | ❌ 없음 | NAS_ONLY_MODERN |
 | **LONDON** | ❌ 없음 | NAS_ONLY_MODERN |
 | **LA** | ❌ 없음 | NAS_ONLY_MODERN |
+
+### WSOPE 파일명 패턴
+
+> **wsope-{YYYY}-{buyin}-{event}-ft-{seq}.mp4**
+
+WSOP Europe 파일은 하이픈 구분자 기반 명명 규칙 사용.
+
+| 요소 | 예시 | 설명 |
+|------|------|------|
+| `wsope` | `wsope` | WSOP Europe 접두사 (고정) |
+| `YYYY` | `2021` | 연도 |
+| `buyin` | `10k`, `25k`, `1650` | 바이인 금액 (K 또는 숫자) |
+| `event` | `me`, `nlh6max`, `platinumhighroller` | 이벤트 타입 |
+| `ft` | `ft` | Final Table (고정) |
+| `seq` | `001`, `004`, `009` | 시퀀스 번호 |
+
+**파일명 예시**:
+```
+wsope-2021-10k-me-ft-004.mp4          → €10K Main Event
+wsope-2021-10k-nlh6max-ft-009.mp4     → €10K NLH 6-Max
+wsope-2021-1650-nlh6max-ft-010.mp4    → €1,650 NLH 6-Max
+wsope-2021-25k-platinumhighroller-ft-001.mp4 → €25K Platinum High Roller
+```
+
+**FT 충돌 없음**: `ft`는 하이픈 구분자 내 고정 위치 (`{event}-ft-{seq}`)로 Day FT 패턴과 분리 처리.
 
 ---
 
@@ -347,6 +388,175 @@ if era == 'CLASSIC' and event_type == 'ME':
 - NAS에 Part 1, Part 2 등 복수 콘텐츠 존재
 - **해결**: Catalog Title 생성 (예: "Wsop 2002 Main Event Part 1")
 
+### 9.1 CLASSIC Era Primary/Backup 그룹핑 (v5.8)
+
+**BACKUP 파일 패턴**:
+| 패턴 | 예시 | 설명 |
+|------|------|------|
+| `nobug` | `wsop-1973-me-nobug.mp4` | 버그 수정된 저용량 버전 |
+| `VHS DUB` | `1995 WSOP VHS DUB.mov` | VHS 복사본 |
+
+**그룹핑 규칙**:
+```python
+# 1. 그룹 내 유일한 파일 → PRIMARY
+if len(group_files) == 1:
+    return 'PRIMARY'
+
+# 2. nobug/VHS DUB 패턴 → BACKUP
+if 'nobug' in filename.lower() or 'vhs dub' in filename.lower():
+    return 'BACKUP'
+
+# 3. 용량 큰 파일 → PRIMARY (동일 그룹 내)
+# 예: WSOP_1983.mov (72GB) = PRIMARY
+#     WSOP_1983.mxf (17GB) = BACKUP
+#     wsop-1983-me-nobug.mp4 (3GB) = BACKUP
+```
+
+**Part 분리**:
+| 파일명 패턴 | 예시 | 그룹 |
+|------------|------|------|
+| `Part X` | `2002 World Series of Poker Part 1.mov` | `WSOP_2002_ME_P1` |
+| `WSOP_YYYY_X` | `WSOP_2002_1.mxf` | `WSOP_2002_ME_P1` |
+
+**2002년 예시**:
+| 파일명 | Part | Role | 용량 |
+|--------|------|------|------|
+| `2002 World Series of Poker Part 1.mov` | 1 | PRIMARY | 92GB |
+| `WSOP_2002_1.mxf` | 1 | BACKUP | 18GB |
+| `2002 World Series of Poker Part 2.mov` | 2 | PRIMARY | 94GB |
+| `WSOP_2002_2.mxf` | 2 | BACKUP | 18GB |
+
+### 9.2 2004년 특수 규칙 (v5.10)
+
+> **수작업 예정**: 메타데이터 작업 시 전면 수정 예정
+
+**폴더별 처리:**
+| 폴더 | 파일 수 | 처리 |
+|------|---------|------|
+| `Bracelet Event` | 6 | TOC EP01-06 (모두 PRIMARY) |
+| `Generics(No Graphic)` | 26 | ME/BR/기타 분류 |
+| `MXFs (master)` | 23 | 모두 BACKUP |
+
+**분류 규칙:**
+```python
+# Show 13-22 + ME → Main Event Episode
+if 'ME' in event_name:
+    return 'WSOP_ME', episode_num
+
+# Show 1-12 → Bracelet Event
+elif show_num <= 12:
+    return 'WSOP_BR', show_num
+
+# Tournament of Champions Generic → BACKUP
+elif 'generic' in filename.lower():
+    return 'WSOP_TOC_GENERIC', role='BACKUP'
+
+# 기타 → 파일명 그대로 출력
+```
+
+**특수 케이스:**
+| 케이스 | 처리 |
+|--------|------|
+| Show 3 (이름없음) | `(noName)` 표기 |
+| Show 4, 5 | mxf만 존재 → BACKUP |
+| TOC Generic 3개 | BACKUP |
+
+---
+
+### 9.3 2003년 특수 규칙 (Moneymaker Year) (v5.9)
+
+**파일 분류:**
+| 유형 | 패턴 | 설명 |
+|------|------|------|
+| `WSOP_ME` | `WSOP_2003-XX.mxf` | Main Event Episode 1-7 |
+| `WSOP_ME_FT` | `Final Table` 포함 | Final Table |
+| `WSOP_BEST` | `Best of` 또는 `Best_Of` 포함 | 컴필레이션 |
+
+**Best Of 주제 정규화:**
+```python
+TOPIC_NORMALIZE = {
+    'all ins': 'All-Ins',
+    'amazing all-ins': 'All-Ins',
+    'bluffs': 'Bluffs',
+    'best bluffs': 'Bluffs',
+    'amazing bluffs': 'Bluffs',
+    'moneymaker': 'Moneymaker',
+    'memorable moments': 'Memorable Moments',
+}
+```
+
+**그룹핑:**
+| 그룹 | Entry Key | 파일 수 |
+|------|-----------|---------|
+| ME Episode 1-6 | `WSOP_2003_ME_EP{N}` | 각 1개 |
+| ME Episode 7 | `WSOP_2003_ME_EP7` | 1개 |
+| ME Episode 7 (text) | `WSOP_2003_ME_EP7_TEXT` | 1개 (별도 PRIMARY) |
+| Final Table | `WSOP_2003_ME_FT` | 1개 |
+| Best Of: [Topic] | `WSOP_2003_BEST_{Topic}` | 2개 (mov+mxf) |
+
+**확장자 우선순위 적용:**
+- Best Of: mov (PRIMARY) > mxf (BACKUP)
+- "text" 버전: 별도 그룹으로 분리, 둘 다 PRIMARY
+
+### 9.4 2005년 특수 규칙 (v5.11)
+
+**파일 구조 (75개):**
+| 유형 | 패턴 | 파일 수 |
+|------|------|---------|
+| Show mov | `WSOP 2005 Show {N} ...` | 33 |
+| Show mxf | `WSOP_2005_{NN}.mxf` | 32 |
+| TOC | `Tournament of Champs` | 3 |
+| Circuit | Lake Tahoe, Rio, Rincon, New Orleans | 5 |
+| EOE | `EOE Final Table` | 1 |
+| Best Of | `Best Hand Ever Played` | 1 |
+
+**Show 매핑:**
+- **Shows 7-20**: Bracelet Events (BR)
+- **Shows 21-32**: Main Event Episodes 1-12 (ME)
+- **Shows 1-6**: mxf만 존재 (mov 없음)
+
+**버전 우선순위:**
+```python
+VERSION_PRIORITY = {
+    'master': 1,   # Master 버전 (최고 품질)
+    'plain': 2,    # 일반 버전
+    'generic': 3,  # Generic 버전 (그래픽 없음)
+    'mxf': 4       # MXF 아카이브
+}
+```
+
+**그룹핑 규칙:**
+| 조건 | PRIMARY | BACKUP |
+|------|---------|--------|
+| Master + Generic + mxf | Master | Generic, mxf |
+| Plain + mxf | Plain | mxf |
+| mxf only (Show 1-6) | mxf | - |
+
+**그룹 ID 생성:**
+```python
+# Show 기반 그룹핑
+if ME_SHOW_START <= show_num <= ME_SHOW_END:
+    group_id = f'WSOP_2005_ME_S{show_num}'
+else:
+    group_id = f'WSOP_2005_BR_S{show_num}'
+```
+
+**TOC 에피소드 분리:**
+- 각 TOC 파일은 다른 ES 코드 → 다른 에피소드
+- EP01, EP02, EP03 각각 PRIMARY
+
+**결과:**
+| 유형 | PRIMARY | BACKUP |
+|------|---------|--------|
+| WSOP_ME | 12 | 4 |
+| WSOP_BR | 14 | 3 |
+| WSOP_TOC | 3 | 0 |
+| WSOP_CIRCUIT | 5 | 0 |
+| WSOP_EOE | 1 | 0 |
+| WSOP_BEST | 1 | 0 |
+| WSOP_MXF | 6 | 26 |
+| **합계** | **42** | **33** |
+
 ---
 
 ## 10. 수작업 필요 항목
@@ -363,6 +573,12 @@ if era == 'CLASSIC' and event_type == 'ME':
 
 | 버전 | 날짜 | 변경 내용 |
 |------|------|----------|
+| 5.11 | 2025-12-18 | 2005년 특수 규칙 추가 (Show 기반 그룹핑, 버전 우선순위) |
+| 5.10 | 2025-12-18 | 2004년 특수 규칙 추가 (폴더 기반 분류, TOC/MXF BACKUP) |
+| 5.9 | 2025-12-18 | 2003년 특수 규칙 추가 (Best Of 주제 정규화, text 버전 분리) |
+| 5.8 | 2025-12-18 | CLASSIC Era Primary/Backup 그룹핑 규칙 추가 (nobug, VHS DUB, Part) |
+| 5.7 | 2025-12-18 | WSOPE 파일명 패턴 규칙 추가 (ft = Final Table) |
+| 5.6 | 2025-12-18 | 바이인 없는 이벤트 처리 (Tournament of Champions 등) |
 | 5.5 | 2025-12-18 | GOG 규칙: 에피소드별 최고 우선순위 = PRIMARY (12개 에피소드 각 1개) |
 | 5.4 | 2025-12-18 | GOG 규칙 수정: 찐최종만 PRIMARY, 나머지 BACKUP + Title 버전 표기 |
 | 5.3 | 2025-12-18 | GOG 버전 우선순위 규칙 추가 (찐최종 > 최종 > 클린본) |

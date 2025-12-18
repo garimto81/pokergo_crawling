@@ -4,25 +4,30 @@ import {
   Files,
   FolderTree,
   Settings,
-  FileCode2
+  FileCode2,
+  CheckSquare,
+  Layers
 } from 'lucide-react';
 
 const navItems = [
-  { path: '/', label: 'Dashboard', icon: LayoutDashboard },
+  { path: '/', label: 'Explorer', icon: Layers },
+  { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { path: '/files', label: 'Files', icon: Files },
   { path: '/groups', label: 'Groups', icon: FolderTree },
+  { path: '/entries', label: 'Entries', icon: CheckSquare },
   { path: '/patterns', label: 'Patterns', icon: FileCode2 },
   { path: '/settings', label: 'Settings', icon: Settings },
 ];
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
+  const isExplorerPage = location.pathname === '/' || location.pathname === '/explorer';
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* Header */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-2">
               <FolderTree className="w-8 h-8 text-blue-600" />
@@ -35,10 +40,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
       {/* Navigation */}
       <nav className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex space-x-4">
             {navItems.map((item) => {
-              const isActive = location.pathname === item.path;
+              const isActive = location.pathname === item.path ||
+                (item.path === '/' && location.pathname === '/explorer');
               const Icon = item.icon;
               return (
                 <Link
@@ -60,7 +66,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       </nav>
 
       {/* Main content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className={isExplorerPage ? 'flex-1 overflow-hidden' : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full'}>
         {children}
       </main>
     </div>

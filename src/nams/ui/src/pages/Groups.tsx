@@ -1,12 +1,67 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { groupsApi } from '../api/client';
-import { Search, ChevronLeft, ChevronRight, ChevronDown, ChevronUp } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Edit2, Check, X } from 'lucide-react';
 import type { AssetGroupDetail } from '../types';
 
-function GroupDetail({ group }: { group: AssetGroupDetail }) {
+function GroupDetail({ group, onTitleUpdate }: { group: AssetGroupDetail; onTitleUpdate: (id: number, title: string) => void }) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState(group.catalog_title || '');
+
+  const handleSave = () => {
+    onTitleUpdate(group.id, editTitle);
+    setIsEditing(false);
+  };
+
+  const handleCancel = () => {
+    setEditTitle(group.catalog_title || '');
+    setIsEditing(false);
+  };
+
   return (
     <div className="bg-gray-50 p-4 border-t">
+      {/* Catalog Title Section */}
+      <div className="mb-4 pb-4 border-b">
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-medium text-gray-700">Catalog Title:</p>
+          {!isEditing && (
+            <button
+              onClick={() => setIsEditing(true)}
+              className="p-1 text-gray-400 hover:text-blue-500"
+              title="Edit title"
+            >
+              <Edit2 className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+        {isEditing ? (
+          <div className="flex items-center gap-2 mt-1">
+            <input
+              type="text"
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+              className="flex-1 px-2 py-1 border rounded text-sm focus:ring-2 focus:ring-blue-500"
+              placeholder="Enter catalog title..."
+              autoFocus
+            />
+            <button onClick={handleSave} className="p-1 text-green-600 hover:bg-green-50 rounded">
+              <Check className="w-4 h-4" />
+            </button>
+            <button onClick={handleCancel} className="p-1 text-red-600 hover:bg-red-50 rounded">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        ) : (
+          <p className={`text-sm ${group.catalog_title ? 'text-gray-900' : 'text-gray-400 italic'}`}>
+            {group.catalog_title || 'No title set'}
+            {group.catalog_title_manual && (
+              <span className="ml-2 text-xs text-blue-500">(edited)</span>
+            )}
+          </p>
+        )}
+      </div>
+
+      {/* Files Section */}
       <h4 className="font-medium mb-2">Files in this group:</h4>
       <div className="space-y-2">
         {group.files.map((file) => (
@@ -31,6 +86,7 @@ function GroupDetail({ group }: { group: AssetGroupDetail }) {
 }
 
 export function Groups() {
+  const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [yearFilter, setYearFilter] = useState<number | undefined>();
@@ -46,6 +102,19 @@ export function Groups() {
     queryFn: () => groupsApi.get(expandedId!),
     enabled: expandedId !== null,
   });
+
+  const updateTitleMutation = useMutation({
+    mutationFn: ({ id, title }: { id: number; title: string }) =>
+      groupsApi.update(id, { catalog_title: title, catalog_title_manual: true }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['groups'] });
+      queryClient.invalidateQueries({ queryKey: ['group', expandedId] });
+    },
+  });
+
+  const handleTitleUpdate = (id: number, title: string) => {
+    updateTitleMutation.mutate({ id, title });
+  };
 
   return (
     <div className="space-y-6">
@@ -96,9 +165,7 @@ export function Groups() {
                 <th className="w-10"></th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Group ID</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Year</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Region</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ep</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Catalog Title</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Files</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Size</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">PokerGO</th>
@@ -121,9 +188,9 @@ export function Groups() {
                     </td>
                     <td className="px-6 py-4 text-sm font-medium text-gray-900">{group.group_id}</td>
                     <td className="px-6 py-4 text-sm text-gray-500">{group.year}</td>
-                    <td className="px-6 py-4 text-sm text-gray-500">{group.region_code || '-'}</td>
-                    <td className="px-6 py-4 text-sm text-gray-500">{group.event_type_code || '-'}</td>
-                    <td className="px-6 py-4 text-sm text-gray-500">{group.episode || '-'}</td>
+                    <td className="px-6 py-4 text-sm text-gray-700 max-w-md truncate" title={group.catalog_title || ''}>
+                      {group.catalog_title || <span className="text-gray-400 italic">-</span>}
+                    </td>
                     <td className="px-6 py-4 text-sm text-gray-500">
                       {group.file_count}
                       {group.has_backup && (
@@ -141,8 +208,8 @@ export function Groups() {
                   </tr>
                   {expandedId === group.id && groupDetail && (
                     <tr key={`${group.id}-detail`}>
-                      <td colSpan={9}>
-                        <GroupDetail group={groupDetail} />
+                      <td colSpan={7}>
+                        <GroupDetail group={groupDetail} onTitleUpdate={handleTitleUpdate} />
                       </td>
                     </tr>
                   )}

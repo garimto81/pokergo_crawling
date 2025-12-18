@@ -1,5 +1,5 @@
 """Database initialization and seed data for NAMS."""
-from .models import Base, Pattern, Region, EventType, PokergoEpisode
+from .models import Base, Pattern, Region, EventType, PokergoEpisode, ExclusionRule
 from .session import engine, get_db_context
 
 
@@ -55,158 +55,124 @@ def seed_event_types():
     print(f"[OK] Seeded {len(event_types)} event types")
 
 
+# Pattern configuration - easily maintainable outside of code logic
+PATTERNS_CONFIG = [
+    ("WSOP_BR_LV_2025_ME", 1, r"WSOP.*Bracelet.*LAS.?VEGAS.*2025.*MAIN.?EVENT", True, "LV", "ME", True, "2025 Las Vegas Main Event"),
+    ("WSOP_BR_LV_2025_SIDE", 2, r"WSOP.*Bracelet.*LAS.?VEGAS.*2025.*BRACELET.?SIDE", True, "LV", "BR", True, "2025 Las Vegas Side Events"),
+    ("WSOP_BR_EU_2025", 3, r"WSOP.*Bracelet.*EUROPE.*2025", True, "EU", None, True, "2025 WSOP Europe"),
+    ("WSOP_BR_EU", 4, r"WSOP.*Bracelet.*EUROPE", True, "EU", None, True, "WSOP Europe (2008-2024)"),
+    ("WSOP_BR_PARADISE", 5, r"WSOP.*Bracelet.*PARADISE", True, "PARADISE", None, True, "WSOP Paradise"),
+    ("WSOP_BR_LV", 6, r"WSOP.*Bracelet.*LAS.?VEGAS", True, "LV", None, True, "WSOP Las Vegas (2021-2024)"),
+    ("WSOP_CIRCUIT_LA", 7, r"WSOP.*Circuit.*LA", True, "LA", None, True, "WSOP Circuit LA"),
+    ("WSOP_CIRCUIT_SUPER", 8, r"WSOP.*Super.?Circuit", True, None, None, False, "WSOP Super Circuit (London, Cyprus)"),
+    ("WSOP_ARCHIVE_PRE2016", 9, r"WSOP.*ARCHIVE.*PRE-?2016", True, "LV", None, True, "WSOP Archive Pre-2016 (1973-2016)"),
+    ("PAD", 10, r"PAD.*(pad-s\d{2}-ep\d{2}|PAD_S\d{2}_EP\d{2})", False, None, None, True, "Poker After Dark"),
+    ("GOG", 11, r"GOG.*E\d{2}[_\-]GOG", False, None, None, True, "Game of Gold"),
+    ("MPP_ME", 12, r"MPP.*Main.?Event", True, "CYPRUS", "ME", False, "MPP Main Event"),
+    ("MPP", 13, r"MPP.*\$\d+[MK]?\s*GTD", True, "CYPRUS", None, False, "Merit Poker Premier"),
+    ("GGMILLIONS", 14, r"GGMillions.*Super.*High.*Roller", False, None, "HR", False, "GGMillions Super High Roller"),
+    # CLASSIC Era patterns (P02/P03 fix - 1973-2002)
+    ("WSOP_CLASSIC_UNDERSCORE", 15, r"WSOP[_\-](\d{4})\.(mov|mxf|mp4)", True, "LV", "ME", False, "CLASSIC Era: WSOP_1983.mov"),
+    ("WSOP_CLASSIC_DASH", 16, r"WSOP\s*-\s*(\d{4})\.(mov|mxf|mp4)", True, "LV", "ME", False, "CLASSIC Era: WSOP - 1973.mp4"),
+    ("WSOP_CLASSIC_LOWERCASE", 17, r"wsop-(\d{4})-me", True, "LV", "ME", True, "CLASSIC Era: wsop-1973-me-nobug.mp4"),
+    # WSOPE patterns (P02/P03/P04 fix)
+    ("WSOPE_EPISODE", 18, r"WSOPE(\d{2})_Episode_(\d+)", True, "EU", None, True, "WSOPE08_Episode_1_H264.mov"),
+    ("WSOPE_LOWERCASE", 19, r"wsope-(\d{4})-\d+k?-[a-z]+-ft-(\d+)", True, "EU", None, True, "wsope-2021-10k-me-ft-004.mp4"),
+    # Modern WSOP patterns
+    ("WSOP_YEAR_ME", 20, r"WSOP\s+(\d{4})\s+Main\s*Event", True, "LV", "ME", True, "WSOP 2017 Main Event _ Episode 10.mp4"),
+    ("WSOP_WS_FORMAT", 21, r"WS(\d{2})[_\-](ME|GM|HU|BR)(\d{2})", True, "LV", None, True, "WS11_ME25_NB.mp4"),
+    # Path-based patterns (Event Type from folder structure)
+    ("WSOP_YEAR_DASH_EP", 22, r"WSOP_(\d{4})-(\d+)\.(mxf|mov|mp4)", True, "LV", None, True, "WSOP_2003-01.mxf (Event Type from path)"),
+    ("WSOP_YEAR_UNDERSCORE_EP", 23, r"WSOP_(\d{4})_(\d+)\.(mxf|mov|mp4)", True, "LV", None, True, "WSOP_2005_01.mxf (Event Type from path)"),
+    # BOOM Era patterns (2003-2010)
+    ("BOOM_YEAR_WSOP_ME", 24, r"(\d{4})\s+WSOP\s+ME(\d+)", True, "LV", "ME", True, "2009 WSOP ME01.mov"),
+    ("BOOM_WSOP_YEAR_SHOW", 25, r"WSOP\s+(\d{4})\s+Show\s+(\d+)", True, "LV", None, True, "WSOP 2005 Show 10_xxx.mov"),
+    ("ESPN_WSOP_SHOW", 26, r"ESPN\s+(\d{4})\s+WSOP.*SHOW\s+(\d+)", True, "LV", "ME", True, "ESPN 2007 WSOP SEASON 5 SHOW 1.mov"),
+    ("BOOM_YEAR_WSOP_SHOW", 27, r"(\d{4})\s+WSOP\s+Show\s+(\d+)", True, "LV", None, True, "2004 WSOP Show 13 ME 01.mov"),
+    ("BOOM_WSOP_BEST", 28, r"(\d{4})\s+WSOP\s+Best", True, "LV", "BEST", False, "2003 WSOP Best of ALL INS.mov"),
+    ("CLASSIC_WORLD_SERIES", 29, r"(\d{4})\s+World\s+Series\s+of\s+Poker", True, "LV", "ME", False, "1995 World Series of Poker.mov"),
+    # Additional patterns
+    ("WSOP_BEST_OF", 30, r"WSOP_(\d{4})_Best_Of", True, "LV", "BEST", False, "WSOP_2003_Best_Of_Amazing_All-Ins.mxf"),
+    ("WSOP_TOC", 31, r"(\d{4})\s+WSOP\s+Tournament\s+of\s+Champ", True, "LV", "BR", False, "2004 WSOP Tournament of Champs.mov"),
+    ("WSOP_LOCATION", 32, r"WSOP\s+(\d{4})\s+(Lake\s*Tahoe|New\s*Orleans|Rio|Rincon)", True, "LV", None, False, "WSOP 2005 Lake Tahoe CC.mov"),
+    ("WCLA_PE_ET", 33, r"W(CLA|P)(\d{2})-(PE|ET|EP)-(\d+)", True, "LA", None, True, "WCLA23-PE-01.mkv (Player Emotion)"),
+]
+
+
+def _create_pattern_if_not_exists(db, config: tuple) -> bool:
+    """Create a pattern if it doesn't exist. Returns True if created."""
+    name, priority, regex, extract_year, region, etype, extract_ep, desc = config
+    existing = db.query(Pattern).filter(Pattern.name == name).first()
+    if not existing:
+        db.add(Pattern(
+            name=name, priority=priority, regex=regex,
+            extract_year=extract_year, extract_region=region,
+            extract_type=etype, extract_episode=extract_ep,
+            description=desc
+        ))
+        return True
+    return False
+
+
 def seed_patterns():
     """Seed initial pattern definitions based on full path analysis."""
-    patterns = [
+    with get_db_context() as db:
+        created = sum(1 for cfg in PATTERNS_CONFIG if _create_pattern_if_not_exists(db, cfg))
+        db.commit()
+    print(f"[OK] Seeded {len(PATTERNS_CONFIG)} patterns")
+
+
+def seed_exclusion_rules():
+    """Seed initial exclusion rules."""
+    rules = [
         {
-            "name": "WSOP_BR_LV_2025_ME",
-            "priority": 1,
-            "regex": r"WSOP.*Bracelet.*LAS.?VEGAS.*2025.*MAIN.?EVENT",
-            "extract_year": True,
-            "extract_region": "LV",
-            "extract_type": "ME",
-            "extract_episode": False,
-            "description": "2025 Las Vegas Main Event",
+            "rule_type": "size",
+            "operator": "lt",
+            "value": "1073741824",  # 1GB in bytes
+            "description": "1GB 미만 파일 제외 (저화질/프리뷰)",
         },
         {
-            "name": "WSOP_BR_LV_2025_SIDE",
-            "priority": 2,
-            "regex": r"WSOP.*Bracelet.*LAS.?VEGAS.*2025.*BRACELET.?SIDE",
-            "extract_year": True,
-            "extract_region": "LV",
-            "extract_type": "BR",
-            "extract_episode": False,
-            "description": "2025 Las Vegas Side Events",
+            "rule_type": "duration",
+            "operator": "lt",
+            "value": "3600",  # 1 hour in seconds
+            "description": "1시간 미만 영상 제외 (클립/프리뷰)",
         },
         {
-            "name": "WSOP_BR_EU_2025",
-            "priority": 3,
-            "regex": r"WSOP.*Bracelet.*EUROPE.*2025",
-            "extract_year": True,
-            "extract_region": "EU",
-            "extract_type": None,
-            "extract_episode": False,
-            "description": "2025 WSOP Europe",
+            "rule_type": "keyword",
+            "operator": "contains",
+            "value": "clip",
+            "description": "클립 영상 제외",
         },
         {
-            "name": "WSOP_BR_EU",
-            "priority": 4,
-            "regex": r"WSOP.*Bracelet.*EUROPE",
-            "extract_year": True,
-            "extract_region": "EU",
-            "extract_type": None,
-            "extract_episode": True,
-            "description": "WSOP Europe (2008-2024)",
+            "rule_type": "keyword",
+            "operator": "contains",
+            "value": "highlight",
+            "description": "하이라이트 영상 제외",
         },
         {
-            "name": "WSOP_BR_PARADISE",
-            "priority": 5,
-            "regex": r"WSOP.*Bracelet.*PARADISE",
-            "extract_year": True,
-            "extract_region": "PARADISE",
-            "extract_type": None,
-            "extract_episode": False,
-            "description": "WSOP Paradise",
+            "rule_type": "keyword",
+            "operator": "contains",
+            "value": "circuit",
+            "description": "WSOP Circuit 제외 (별도 이벤트)",
         },
         {
-            "name": "WSOP_BR_LV",
-            "priority": 6,
-            "regex": r"WSOP.*Bracelet.*LAS.?VEGAS",
-            "extract_year": True,
-            "extract_region": "LV",
-            "extract_type": None,
-            "extract_episode": False,
-            "description": "WSOP Las Vegas (2021-2024)",
-        },
-        {
-            "name": "WSOP_CIRCUIT_LA",
-            "priority": 7,
-            "regex": r"WSOP.*Circuit.*LA",
-            "extract_year": True,
-            "extract_region": "LA",
-            "extract_type": None,
-            "extract_episode": True,
-            "description": "WSOP Circuit LA",
-        },
-        {
-            "name": "WSOP_CIRCUIT_SUPER",
-            "priority": 8,
-            "regex": r"WSOP.*Super.?Circuit",
-            "extract_year": True,
-            "extract_region": None,
-            "extract_type": None,
-            "extract_episode": False,
-            "description": "WSOP Super Circuit (London, Cyprus)",
-        },
-        {
-            "name": "WSOP_ARCHIVE_PRE2016",
-            "priority": 9,
-            "regex": r"WSOP.*ARCHIVE.*PRE-?2016",
-            "extract_year": True,
-            "extract_region": "LV",
-            "extract_type": None,
-            "extract_episode": True,
-            "description": "WSOP Archive Pre-2016 (1973-2016)",
-        },
-        {
-            "name": "PAD",
-            "priority": 10,
-            "regex": r"PAD.*(pad-s\d{2}-ep\d{2}|PAD_S\d{2}_EP\d{2})",
-            "extract_year": False,
-            "extract_region": None,
-            "extract_type": None,
-            "extract_episode": True,
-            "description": "Poker After Dark",
-        },
-        {
-            "name": "GOG",
-            "priority": 11,
-            "regex": r"GOG.*E\d{2}[_\-]GOG",
-            "extract_year": False,
-            "extract_region": None,
-            "extract_type": None,
-            "extract_episode": True,
-            "description": "Game of Gold",
-        },
-        {
-            "name": "MPP_ME",
-            "priority": 12,
-            "regex": r"MPP.*Main.?Event",
-            "extract_year": True,
-            "extract_region": "CYPRUS",
-            "extract_type": "ME",
-            "extract_episode": False,
-            "description": "MPP Main Event",
-        },
-        {
-            "name": "MPP",
-            "priority": 13,
-            "regex": r"MPP.*\$\d+[MK]?\s*GTD",
-            "extract_year": True,
-            "extract_region": "CYPRUS",
-            "extract_type": None,
-            "extract_episode": False,
-            "description": "Merit Poker Premier",
-        },
-        {
-            "name": "GGMILLIONS",
-            "priority": 14,
-            "regex": r"GGMillions.*Super.*High.*Roller",
-            "extract_year": False,
-            "extract_region": None,
-            "extract_type": "HR",
-            "extract_episode": False,
-            "description": "GGMillions Super High Roller",
+            "rule_type": "keyword",
+            "operator": "contains",
+            "value": "paradise",
+            "description": "WSOP Paradise 제외 (PokerGO 데이터 없음)",
         },
     ]
 
     with get_db_context() as db:
-        for p in patterns:
-            existing = db.query(Pattern).filter(Pattern.name == p["name"]).first()
+        for r in rules:
+            existing = db.query(ExclusionRule).filter(
+                ExclusionRule.rule_type == r["rule_type"],
+                ExclusionRule.value == r["value"]
+            ).first()
             if not existing:
-                db.add(Pattern(**p))
+                db.add(ExclusionRule(**r))
         db.commit()
-    print(f"[OK] Seeded {len(patterns)} patterns")
+    print(f"[OK] Seeded {len(rules)} exclusion rules")
 
 
 def init_database():
@@ -216,6 +182,7 @@ def init_database():
     seed_regions()
     seed_event_types()
     seed_patterns()
+    seed_exclusion_rules()
     print("[OK] Database initialization complete")
 
 

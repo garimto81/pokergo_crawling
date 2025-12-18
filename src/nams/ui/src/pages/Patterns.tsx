@@ -2,11 +2,11 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { patternsApi } from '../api/client';
 import { Plus, Edit2, Trash2, TestTube, GripVertical } from 'lucide-react';
-import type { Pattern } from '../types';
+import type { Pattern, PatternTestResult } from '../types';
 
 function PatternTester({ pattern }: { pattern: Pattern }) {
   const [filename, setFilename] = useState('');
-  const [result, setResult] = useState<any>(null);
+  const [result, setResult] = useState<PatternTestResult | null>(null);
 
   const testMutation = useMutation({
     mutationFn: () => patternsApi.test(pattern.id, filename),

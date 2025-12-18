@@ -49,6 +49,15 @@ from .group import (
     GroupSplitRequest,
     GroupFilter,
 )
+from .exclusion import (
+    ExclusionRuleBase,
+    ExclusionRuleCreate,
+    ExclusionRuleUpdate,
+    ExclusionRuleResponse,
+    ExclusionRuleListResponse,
+    ExclusionRuleTestRequest,
+    ExclusionRuleTestResult,
+)
 
 __all__ = [
     # Common
@@ -97,4 +106,12 @@ __all__ = [
     "GroupMergeRequest",
     "GroupSplitRequest",
     "GroupFilter",
+    # Exclusion
+    "ExclusionRuleBase",
+    "ExclusionRuleCreate",
+    "ExclusionRuleUpdate",
+    "ExclusionRuleResponse",
+    "ExclusionRuleListResponse",
+    "ExclusionRuleTestRequest",
+    "ExclusionRuleTestResult",
 ]

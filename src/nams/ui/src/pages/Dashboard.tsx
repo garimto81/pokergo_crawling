@@ -3,7 +3,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { statsApi, processApi } from '../api/client';
 import {
   Files, FolderTree, HardDrive, Link2,
-  RefreshCw, Download, FileSpreadsheet, Upload
+  RefreshCw, Download, FileSpreadsheet, Upload,
+  CheckCircle, AlertTriangle, XCircle, Database
 } from 'lucide-react';
 
 function StatCard({ title, value, subtitle, icon: Icon, color }: {
@@ -272,6 +273,16 @@ export function Dashboard() {
     queryFn: processApi.getGoogleSheetsStatus,
   });
 
+  const { data: matchingSummary } = useQuery({
+    queryKey: ['stats', 'matchingSummary'],
+    queryFn: statsApi.getMatchingSummary,
+  });
+
+  const { data: syncStatus } = useQuery({
+    queryKey: ['stats', 'syncStatus'],
+    queryFn: statsApi.getSyncStatus,
+  });
+
   // Scan mutation
   const scanMutation = useMutation({
     mutationFn: (params: { mode: 'incremental' | 'full'; folderType: 'origin' | 'archive' | 'both'; originPath: string; archivePath: string }) =>
@@ -409,6 +420,96 @@ export function Dashboard() {
           color="bg-orange-500"
         />
       </div>
+
+      {/* 4-Category Matching Summary */}
+      {matchingSummary && (
+        <div className="bg-white rounded-lg shadow p-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">4-Category Matching Status</h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-green-800">MATCHED</p>
+                  <p className="text-2xl font-bold text-green-900">{matchingSummary.MATCHED}</p>
+                  <p className="text-xs text-green-600">NAS + PokerGO</p>
+                </div>
+                <CheckCircle className="w-8 h-8 text-green-500" />
+              </div>
+            </div>
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-800">NAS_ONLY_HISTORIC</p>
+                  <p className="text-2xl font-bold text-gray-900">{matchingSummary.NAS_ONLY_HISTORIC}</p>
+                  <p className="text-xs text-gray-600">Pre-2011 (No PokerGO)</p>
+                </div>
+                <Database className="w-8 h-8 text-gray-500" />
+              </div>
+            </div>
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-yellow-800">NAS_ONLY_MODERN</p>
+                  <p className="text-2xl font-bold text-yellow-900">{matchingSummary.NAS_ONLY_MODERN}</p>
+                  <p className="text-xs text-yellow-600">2011+ (Needs Review)</p>
+                </div>
+                <AlertTriangle className="w-8 h-8 text-yellow-500" />
+              </div>
+            </div>
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-red-800">POKERGO_ONLY</p>
+                  <p className="text-2xl font-bold text-red-900">{matchingSummary.POKERGO_ONLY}</p>
+                  <p className="text-xs text-red-600">No NAS File</p>
+                </div>
+                <XCircle className="w-8 h-8 text-red-500" />
+              </div>
+            </div>
+          </div>
+          <div className="mt-4 pt-4 border-t border-gray-200 flex justify-between text-sm text-gray-500">
+            <span>Total NAS Groups: {matchingSummary.total_nas_groups}</span>
+            <span>Total PokerGO Episodes: {matchingSummary.total_pokergo_episodes}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Origin/Archive Sync Status */}
+      {syncStatus && (
+        <div className="bg-white rounded-lg shadow p-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">Origin/Archive Sync Status</h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <p className="text-sm font-medium text-blue-800">Origin Files</p>
+              <p className="text-2xl font-bold text-blue-900">{syncStatus.origin_files}</p>
+              <p className="text-xs text-blue-600">Primary: {syncStatus.origin_primary}</p>
+            </div>
+            <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+              <p className="text-sm font-medium text-purple-800">Archive Files</p>
+              <p className="text-2xl font-bold text-purple-900">{syncStatus.archive_files}</p>
+              <p className="text-xs text-purple-600">
+                {syncStatus.has_role_conflict ? (
+                  <span className="text-red-600">Primary: {syncStatus.archive_primary} (Conflict!)</span>
+                ) : (
+                  <span>Primary: {syncStatus.archive_primary}</span>
+                )}
+              </p>
+            </div>
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+              <p className="text-sm font-medium text-green-800">Shared Groups</p>
+              <p className="text-2xl font-bold text-green-900">{syncStatus.shared_groups}</p>
+              <p className="text-xs text-green-600">Origin + Archive</p>
+            </div>
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+              <p className="text-sm font-medium text-gray-800">Exclusive Groups</p>
+              <p className="text-lg font-bold text-gray-900">
+                O: {syncStatus.origin_only_groups} / A: {syncStatus.archive_only_groups}
+              </p>
+              <p className="text-xs text-gray-600">Origin Only / Archive Only</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Year Distribution */}
       <div className="bg-white rounded-lg shadow p-6">

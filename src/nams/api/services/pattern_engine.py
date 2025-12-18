@@ -28,6 +28,7 @@ class ExtractionResult:
     buyin: Optional[str] = None        # $100K, $5K
     gtd: Optional[str] = None          # $5M GTD -> 5M
     version: Optional[str] = None      # NC (No Commentary), NB, CLEAN
+    part: Optional[int] = None         # Part number (for CLASSIC era: Part 1, Part 2)
 
 
 def get_region_id(db: Session, code: str) -> Optional[int]:
@@ -49,32 +50,83 @@ def get_event_type_id(db: Session, code: str) -> Optional[int]:
 
 
 def extract_year_from_path(path: str) -> Optional[int]:
-    """Extract year from full path."""
-    # Try 4-digit year patterns
-    patterns = [
-        r'(\d{4})\s*WSOP',           # "2024 WSOP"
+    """Extract year from full path.
+
+    Priority:
+    1. Year at start of filename (most reliable): "1987 World Series..."
+    2. WSOP patterns in filename: "WSOP_2003-01.mxf", "wsop-1973-me-nobug.mp4"
+    3. WSOP patterns in path (excluding PRE-XXXX)
+    4. Folder year: ".../1987/..." (but not PRE-2003)
+    """
+    # Extract filename
+    filename = path.split('\\')[-1].split('/')[-1]
+
+    # Priority 1: Year at start of filename (most reliable)
+    # Pattern: "1987 World Series...", "2003 WSOP...", "2002 World Series Part 1"
+    filename_start_year = re.match(r'^(\d{4})\s+', filename)
+    if filename_start_year:
+        year = int(filename_start_year.group(1))
+        if 1970 <= year <= 2030:
+            return year
+
+    # Priority 2: WSOP patterns in FILENAME only
+    filename_patterns = [
+        r'WSOP[_\-](\d{4})',         # "WSOP_2003", "WSOP-2024"
+        r'WSOP\s*-\s*(\d{4})',       # "WSOP - 1973"
+        r'wsope?-(\d{4})-',          # "wsop-1973-", "wsope-2021-"
         r'WSOP[E]?\s*(\d{4})',       # "WSOP 2024", "WSOPE 2024"
-        r'(\d{4})\s*MPP',            # "2025 MPP"
-        r'WSOP.*?(\d{4})',           # Any WSOP followed by year
     ]
-    for pattern in patterns:
-        match = re.search(pattern, path, re.I)
+    for pattern in filename_patterns:
+        match = re.search(pattern, filename, re.I)
         if match:
             year = int(match.group(1))
             if 1970 <= year <= 2030:
                 return year
 
-    # Try 2-digit year patterns
+    # Priority 3: WSOP patterns in full path (but exclude PRE-XXXX)
+    # Remove PRE-XXXX from path before searching
+    path_cleaned = re.sub(r'PRE-\d{4}', '', path)
+
+    path_patterns = [
+        r'(\d{4})\s*WSOP',           # "2024 WSOP"
+        r'WSOP[E]?\s*(\d{4})',       # "WSOP 2024", "WSOPE 2024"
+        r'WSOP[_\-](\d{4})',         # "WSOP_1983"
+        r'WSOP\s*-\s*(\d{4})',       # "WSOP - 1973"
+        r'(\d{4})\s*MPP',            # "2025 MPP"
+        r'wsope?-(\d{4})-',          # "wsop-1973-"
+    ]
+    for pattern in path_patterns:
+        match = re.search(pattern, path_cleaned, re.I)
+        if match:
+            year = int(match.group(1))
+            if 1970 <= year <= 2030:
+                return year
+
+    # Priority 4: 2-digit year patterns
     patterns_2digit = [
         r'WSOPE?(\d{2})[_\-]',       # WSOPE08_, WS12-
+        r'WS(\d{2})[_\-]',           # WS11_
         r'[_\-](\d{2})[_\-]',        # _08_, -12-
     ]
     for pattern in patterns_2digit:
-        match = re.search(pattern, path, re.I)
+        match = re.search(pattern, path_cleaned, re.I)
         if match:
             y = int(match.group(1))
             year = 2000 + y if y < 50 else 1900 + y
             return year
+
+    # Priority 5: Folder year pattern (but not PRE-XXXX)
+    # Pattern: .../1987/... or .../WSOP 1987/...
+    folder_year = re.search(r'[/\\](\d{4})[/\\]', path_cleaned)
+    if folder_year:
+        year = int(folder_year.group(1))
+        if 1970 <= year <= 2030:
+            return year
+
+    # Fallback: generic 4-digit year in filename only (not full path)
+    match = re.search(r'\b(19[7-9]\d|20[0-2]\d)\b', filename)
+    if match:
+        return int(match.group(1))
 
     return None
 
@@ -145,8 +197,142 @@ def extract_version_from_path(path: str) -> Optional[str]:
     return None
 
 
+def extract_episode_from_day_part(path: str) -> Optional[int]:
+    """Extract episode number from Day/Part patterns.
+
+    Day mapping (per MATCHING_RULES.md):
+    - Day 1A, 1B, 1C, 1D → Episode 01
+    - Day 2, 3, 4, ... → Episode 02, 03, 04, ...
+    - Final Day → Episode 99
+
+    Part mapping:
+    - Part 1, Part 2, ... → Episode 01, 02, ...
+    """
+    path_lower = path.lower()
+
+    # Final Day/Table → Episode 99
+    if re.search(r'final\s*(day|table)', path_lower):
+        return 99
+
+    # Day X patterns: Day 1, Day 1A, Day 2B (ABCD variants = same episode)
+    day_match = re.search(r'day\s*(\d+)\s*[abcd]?', path_lower)
+    if day_match:
+        return int(day_match.group(1))
+
+    # Part X patterns: Part 1, Part 2
+    part_match = re.search(r'part\s*(\d+)', path_lower)
+    if part_match:
+        return int(part_match.group(1))
+
+    return None
+
+
+def extract_part_from_path(path: str, year: Optional[int] = None) -> Optional[int]:
+    """Extract Part number from path for CLASSIC era files.
+
+    CLASSIC Era (1973-2002) files may have Part numbers that indicate
+    different content (not just different formats of the same content).
+
+    Patterns:
+    - Part 1.mov, Part 2.mov
+    - WSOP_2002_1.mxf, WSOP_2002_2.mxf
+    - WSOP - 2002 - 1.mxf
+
+    Returns:
+        Part number (1, 2, etc.) or None if not found
+    """
+    path_lower = path.lower()
+    filename = path.split('\\')[-1].split('/')[-1]
+    filename_lower = filename.lower()
+
+    # Pattern 1: Part N, Part_N, Part-N
+    part_match = re.search(r'part[_\s\-]*(\d+)', path_lower)
+    if part_match:
+        return int(part_match.group(1))
+
+    # Pattern 2: WSOP_YYYY_N.ext or WSOP-YYYY-N.ext (only for CLASSIC era)
+    if year and year <= 2002:
+        # WSOP_2002_1.mxf, WSOP_2002_2.mxf
+        wsop_part = re.search(r'wsop[_\-]\d{4}[_\-](\d+)\.(?:mxf|mov|mp4)', filename_lower)
+        if wsop_part:
+            part_num = int(wsop_part.group(1))
+            if part_num <= 10:  # Reasonable part number limit
+                return part_num
+
+        # WSOP - YYYY - N.ext (with spaces)
+        wsop_space = re.search(r'wsop\s*-\s*\d{4}\s*-\s*(\d+)\.(?:mxf|mov|mp4)', filename_lower)
+        if wsop_space:
+            part_num = int(wsop_space.group(1))
+            if part_num <= 10:
+                return part_num
+
+    # Pattern 3: Filename ending with _N or -N before extension (CLASSIC era only)
+    if year and year <= 2002:
+        trailing_num = re.search(r'[_\-](\d+)\.(?:mxf|mov|mp4)$', filename_lower)
+        if trailing_num:
+            part_num = int(trailing_num.group(1))
+            # Only treat as Part if it's a small number (1-10)
+            if 1 <= part_num <= 10:
+                return part_num
+
+    return None
+
+
 def extract_episode_from_path(path: str, pattern_name: str) -> Optional[int]:
     """Extract episode number based on pattern type."""
+    # WS{YY}_{TYPE}{EP} format: WS11_ME01_NB.mp4, WS12_BR25.mxf
+    if pattern_name == "WSOP_WS_FORMAT":
+        match = re.search(r'WS\d{2}[_\-](?:ME|GM|HU|BR)(\d{2})', path, re.I)
+        if match:
+            return int(match.group(1))
+
+    # WSOP{YY}_{TYPE}{EP} format: WSOP13_ME01.mp4, WSOP14_ME07-FINAL.mxf
+    if pattern_name == "WSOP_YEAR_ME":
+        match = re.search(r'WSOP\d{2}[_\-](?:ME|BR|HR)(\d{2})', path, re.I)
+        if match:
+            return int(match.group(1))
+        # Alternative: WSOP13_APAC_ME01
+        match = re.search(r'WSOP\d{2}_\w+_(?:ME|BR|HR)(\d{2})', path, re.I)
+        if match:
+            return int(match.group(1))
+
+    # Path-based patterns: WSOP_2003-01.mxf, WSOP_2005_01.mxf
+    if pattern_name in ("WSOP_YEAR_DASH_EP", "WSOP_YEAR_UNDERSCORE_EP"):
+        # Extract episode from WSOP_YYYY-NN or WSOP_YYYY_NN format
+        match = re.search(r'WSOP_\d{4}[_\-](\d+)\.(?:mxf|mov|mp4)', path, re.I)
+        if match:
+            return int(match.group(1))
+
+    # BOOM Era: 2009 WSOP ME01.mov
+    if pattern_name == "BOOM_YEAR_WSOP_ME":
+        match = re.search(r'\d{4}\s+WSOP\s+ME(\d+)', path, re.I)
+        if match:
+            return int(match.group(1))
+
+    # BOOM Era: WSOP 2005 Show 10_xxx.mov
+    if pattern_name == "BOOM_WSOP_YEAR_SHOW":
+        match = re.search(r'WSOP\s+\d{4}\s+Show\s+(\d+)', path, re.I)
+        if match:
+            return int(match.group(1))
+
+    # ESPN: ESPN 2007 WSOP SEASON 5 SHOW 1.mov
+    if pattern_name == "ESPN_WSOP_SHOW":
+        match = re.search(r'ESPN\s+\d{4}\s+WSOP.*SHOW\s+(\d+)', path, re.I)
+        if match:
+            return int(match.group(1))
+
+    # BOOM Era: 2004 WSOP Show 13 ME 01.mov
+    if pattern_name == "BOOM_YEAR_WSOP_SHOW":
+        match = re.search(r'\d{4}\s+WSOP\s+Show\s+(\d+)', path, re.I)
+        if match:
+            return int(match.group(1))
+
+    # WCLA/WP Player Emotion: WCLA23-PE-01.mkv, WP23-EP-02.mp4
+    if pattern_name == "WCLA_PE_ET":
+        match = re.search(r'W(?:CLA|P)\d{2}-(?:PE|ET|EP)-(\d+)', path, re.I)
+        if match:
+            return int(match.group(1))
+
     # PAD: pad-s12-ep01 or PAD_S13_EP01
     if pattern_name == "PAD":
         match = re.search(r'[Ee][Pp]?(\d{2})', path)
@@ -187,6 +373,66 @@ def extract_episode_from_path(path: str, pattern_name: str) -> Optional[int]:
         if match:
             return int(match.group(1))
 
+    # WSOPE format: WSOPE08_Episode_1_H264.mov
+    if pattern_name == "WSOPE_EPISODE":
+        match = re.search(r'WSOPE\d{2}_Episode_(\d+)', path, re.I)
+        if match:
+            return int(match.group(1))
+
+    # WSOPE lowercase: wsope-2021-10k-me-ft-004.mp4
+    if pattern_name == "WSOPE_LOWERCASE":
+        match = re.search(r'wsope-\d{4}-\d+k?-[a-z]+-ft-(\d+)', path, re.I)
+        if match:
+            return int(match.group(1))
+
+    # WSOP Bracelet LV: WS11_ME01_NB.mp4, WSOP13_ME01.mp4 등
+    # 경로로 매칭되지만 파일명에서 episode 추출
+    if pattern_name in ("WSOP_BR_LV", "WSOP_BR_LV_2025_ME", "WSOP_BR_LV_2025_SIDE"):
+        # WS{YY}_{TYPE}{EP} format
+        match = re.search(r'WS\d{2}[_\-](?:ME|GM|HU|BR)(\d{2})', path, re.I)
+        if match:
+            return int(match.group(1))
+        # WSOP{YY}_{TYPE}{EP} format
+        match = re.search(r'WSOP\d{2}[_\-](?:ME|BR|HR)(\d{2})', path, re.I)
+        if match:
+            return int(match.group(1))
+        # WSOP{YY}_{REGION}_{TYPE}{EP} format: WSOP14_APAC_ME01
+        match = re.search(r'WSOP\d{2}_\w+_(?:ME|BR|HR)(\d{2})', path, re.I)
+        if match:
+            return int(match.group(1))
+        # WS{YY}_Show_{EP} format: WS12_Show_17
+        match = re.search(r'WS\d{2}_Show_(\d+)', path, re.I)
+        if match:
+            return int(match.group(1))
+
+    # P04 fix: Generic episode extraction for any pattern
+    # Episode N, Ep N, Episode_N
+    match = re.search(r'Episode[_\s]?(\d+)', path, re.I)
+    if match:
+        return int(match.group(1))
+
+    # _MExx_, _01_
+    match = re.search(r'[_\-]ME(\d{2})[_\-\.]', path, re.I)
+    if match:
+        return int(match.group(1))
+
+    # wsope-2021-10k-me-ft-004.mp4 -> 004 at end before extension (P04 fix)
+    match = re.search(r'-(\d{3})\.(?:mp4|mov|mxf)$', path, re.I)
+    if match:
+        return int(match.group(1))
+
+    # File ending with _N or -N before extension
+    match = re.search(r'[_\-](\d{1,2})\.(?:mp4|mov|mxf)$', path, re.I)
+    if match:
+        ep = int(match.group(1))
+        if ep < 50:
+            return ep
+
+    # Day/Part → Episode mapping (MATCHING_RULES.md P10-A)
+    day_part_episode = extract_episode_from_day_part(path)
+    if day_part_episode:
+        return day_part_episode
+
     return None
 
 
@@ -208,18 +454,102 @@ def extract_region_from_super_circuit(path: str) -> Optional[str]:
 
 
 def detect_event_type_from_path(path: str) -> Optional[str]:
-    """Detect event type from path keywords."""
+    """Detect event type from path keywords.
+
+    Checks both filename patterns and folder structure.
+    Folder structure examples:
+    - Z:\\ARCHIVE\\WSOP\\WSOP 2003\\Main Event\\WSOP_2003-01.mxf
+    - Z:\\ARCHIVE\\WSOP\\WSOP 2005\\Bracelet\\WSOP_2005_01.mxf
+    """
+    # Main Event patterns (P03 fix - more patterns)
+    # Check folder structure: \\Main Event\\ or /Main Event/
+    if re.search(r'[/\\]Main\s*Event[/\\]', path, re.I):
+        return "ME"
     if re.search(r'Main\s*Event', path, re.I):
         return "ME"
+    if re.search(r'-me-', path, re.I):  # wsop-1973-me-nobug.mp4
+        return "ME"
+    if re.search(r'[_\-]ME\d', path):  # _ME01, -ME25
+        return "ME"
+
+    # BOOM Era (2003-2010): WSOP_YYYY-XX.mxf = Main Event episodes
+    # Pattern: WSOP_2003-01.mxf, WSOP_2005-03.mxf
+    boom_me_match = re.search(r'WSOP_(200[3-9]|2010)-\d+\.mxf', path, re.I)
+    if boom_me_match:
+        return "ME"
+
+    # "World Series of Poker" in filename = Main Event (all eras)
+    if re.search(r'World\s+Series\s+of\s+Poker', path, re.I):
+        return "ME"
+
+    # High Roller patterns
+    if re.search(r'[/\\]High\s*Roller[/\\]', path, re.I):
+        return "HR"
     if re.search(r'High\s*Roller', path, re.I):
         return "HR"
+    if re.search(r'[_\-]HR\d', path):  # _HR01
+        return "HR"
+
+    # Heads Up patterns
+    if re.search(r'[/\\]Heads\s*Up[/\\]', path, re.I):
+        return "HU"
     if re.search(r'Heads\s*Up', path, re.I):
         return "HU"
+    if re.search(r'[_\-]HU\d', path):  # _HU01
+        return "HU"
+
+    # Grudge Match patterns
+    if re.search(r'[/\\]Grudge\s*Match[/\\]', path, re.I):
+        return "GM"
+    if re.search(r'Grudge\s*Match', path, re.I):
+        return "GM"
+    if re.search(r'[_\-]GM\d', path):  # _GM01
+        return "GM"
+
+    # Final Table patterns
+    if re.search(r'[/\\]Final\s*Table[/\\]', path, re.I):
+        return "FT"
     if re.search(r'Final\s*Table', path, re.I):
         return "FT"
-    # Default for bracelet events
+    if re.search(r'-ft-', path, re.I):  # wsope-2021-10k-me-ft-004.mp4
+        return "FT"
+
+    # Bracelet events
+    if re.search(r'[/\\]Bracelet[/\\]', path, re.I):
+        return "BR"
     if re.search(r'Bracelet', path, re.I):
         return "BR"
+    if re.search(r'[_\-]BR\d', path):  # _BR01
+        return "BR"
+
+    # Best Of patterns
+    if re.search(r'[/\\]Best\s*Of[/\\]', path, re.I):
+        return "BEST"
+    if re.search(r'Best\s*Of', path, re.I):
+        return "BEST"
+
+    # CLASSIC Era: WSOP_YYYY or WSOP - YYYY without event type = Main Event (P03 fix)
+    # Patterns: WSOP_2002.mxf, WSOP_2002_1.mxf, WSOP - 2002.mxf, WSOP - 1973 (1).avi
+    classic_patterns = [
+        r'WSOP[_\-\s]+(\d{4})\.',           # WSOP_2002.mxf
+        r'WSOP[_\-\s]+(\d{4})[_\-]\d+\.',   # WSOP_2002_1.mxf, WSOP_2002-1.mxf
+        r'WSOP[_\-\s]+(\d{4})\s*\(\d+\)\.',  # WSOP - 1973 (1).avi (복사본 패턴)
+        r'(\d{4})\s+World\s+Series\s+of\s+Poker',  # 2002 World Series of Poker
+    ]
+    for pattern in classic_patterns:
+        year_match = re.search(pattern, path, re.I)
+        if year_match:
+            year = int(year_match.group(1))
+            if year <= 2002:  # CLASSIC Era - only Main Event
+                return "ME"
+
+    # CLASSIC Era fallback: 경로에 연도만 있고 WSOP 키워드가 있으면 ME (P03-B)
+    # 예: Y:\WSOP backup\PRE-2003\1973\WSOP - 1973 (1).avi
+    if 'WSOP' in path.upper() or 'PRE-' in path.upper():
+        year_match = re.search(r'\b(19[7-9]\d|200[0-2])\b', path)
+        if year_match:
+            return "ME"
+
     return None
 
 
@@ -261,6 +591,17 @@ def extract_metadata(db: Session, full_path: str, filename: str = None) -> Extra
                 result.region_code = pattern.extract_region
                 if not result.region_code and pattern.name == "WSOP_CIRCUIT_SUPER":
                     result.region_code = extract_region_from_super_circuit(match_target)
+
+                # CRITICAL: Override region based on filename keywords (APAC, PARADISE, EUROPE)
+                # This handles cases like WSOP13_APAC_ME01 in WSOP-LAS VEGAS folder
+                filename_upper = (filename or match_target.split('\\')[-1].split('/')[-1]).upper()
+                if '_APAC_' in filename_upper or 'APAC' in filename_upper:
+                    result.region_code = 'APAC'
+                elif '_PARADISE_' in filename_upper or 'PARADISE' in filename_upper:
+                    result.region_code = 'PARADISE'
+                elif 'WSOPE' in filename_upper or '_EU_' in filename_upper:
+                    result.region_code = 'EU'
+
                 if result.region_code:
                     result.region_id = get_region_id(db, result.region_code)
 
@@ -281,6 +622,9 @@ def extract_metadata(db: Session, full_path: str, filename: str = None) -> Extra
                 result.buyin = extract_buyin_from_path(match_target)
                 result.gtd = extract_gtd_from_path(match_target)
                 result.version = extract_version_from_path(match_target)
+
+                # CLASSIC Era Part extraction (1973-2002)
+                result.part = extract_part_from_path(match_target, result.year)
 
                 # PAD specific: season
                 if pattern.name == "PAD":
@@ -335,6 +679,9 @@ def extract_basic(db: Session, path: str) -> ExtractionResult:
     result.buyin = extract_buyin_from_path(path)
     result.gtd = extract_gtd_from_path(path)
     result.version = extract_version_from_path(path)
+
+    # CLASSIC Era Part extraction (1973-2002)
+    result.part = extract_part_from_path(path, result.year)
 
     return result
 
@@ -438,8 +785,11 @@ def reprocess_all_files(db: Session) -> dict:
         # Use full_path for matching
         result = extract_metadata(db, file.full_path or file.directory, file.filename)
 
-        if result.matched:
-            stats['matched'] += 1
+        # Update if pattern matched OR basic extraction found useful data
+        has_useful_data = result.matched or result.year or result.event_type_id
+        if has_useful_data:
+            if result.matched:
+                stats['matched'] += 1
 
             updated = False
             # Update all fields from extraction

@@ -39,6 +39,7 @@ async def list_groups(
     region_id: Optional[int] = None,
     event_type_id: Optional[int] = None,
     has_pokergo_match: Optional[bool] = None,
+    match_category: Optional[str] = None,
     has_backup: Optional[bool] = None,
     min_file_count: Optional[int] = None,
     search: Optional[str] = None,
@@ -62,6 +63,8 @@ async def list_groups(
             query = query.filter(AssetGroup.pokergo_episode_id.isnot(None))
         else:
             query = query.filter(AssetGroup.pokergo_episode_id.is_(None))
+    if match_category:
+        query = query.filter(AssetGroup.match_category == match_category)
     if has_backup is not None:
         query = query.filter(AssetGroup.has_backup == has_backup)
     if min_file_count:
@@ -86,6 +89,8 @@ async def list_groups(
             region_code=g.region.code if g.region else None,
             event_type_code=g.event_type.code if g.event_type else None,
             episode=g.episode,
+            catalog_title=g.catalog_title,
+            match_category=g.match_category,
             file_count=g.file_count,
             total_size_formatted=format_size(g.total_size_bytes or 0),
             has_backup=g.has_backup,
