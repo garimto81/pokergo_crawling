@@ -242,3 +242,63 @@ data/
 | API 서버 시작 실패 | 포트 충돌 | `netstat -ano | findstr 8001` 확인 |
 | 전체 테스트 타임아웃 | 120초 제한 | 개별 테스트 파일로 실행 권장 |
 | 매칭률 저하 | Region/Event 불일치 | `docs/MATCHING_RULES.md` DUPLICATE 방지 규칙 확인 |
+
+## 작업 관리 워크플로우
+
+### 체크리스트 파일
+- **위치**: `pokergo_crawling_checklist.yaml`
+- **용도**: 모든 작업 추적 및 결과 기록
+- **구조**: current_task, tasks (완료), pending_tasks (대기), stats
+
+### 작업 처리 프로세스
+
+```
+1. 작업 시작 → yaml에서 pending_tasks 확인
+2. 에이전트 할당 → 적절한 서브 에이전트 선택
+3. 작업 실행 → 서브 에이전트가 처리
+4. 결과 기록 → yaml 파일에 결과 업데이트
+5. 상태 확인 → 완료 후 yaml 파일 검토
+```
+
+### 서브 에이전트 매핑
+
+| 카테고리 | 에이전트 | 용도 |
+|----------|----------|------|
+| feature | general-purpose, backend-dev | 새 기능 개발 |
+| test | test-engineer | E2E/단위 테스트 |
+| refactoring | code-reviewer | 코드 개선 |
+| bugfix | debugger | 버그 수정 |
+| docs | docs-writer | 문서 작성 |
+
+### yaml 파일 업데이트 규칙
+
+**작업 시작 시:**
+```yaml
+current_task:
+  id: "TASK-XXX"
+  title: "작업 제목"
+  status: "in_progress"
+  started_at: "YYYY-MM-DDTHH:MM:SS"
+  agent: "에이전트명"
+```
+
+**작업 완료 시:**
+```yaml
+# current_task를 null로 변경
+current_task: null
+
+# tasks 목록에 완료 정보 추가
+tasks:
+  - id: "TASK-XXX"
+    status: "completed"
+    completed_at: "YYYY-MM-DDTHH:MM:SS"
+    result:
+      success: true/false
+      message: "결과 요약"
+      files_changed: [...]
+      commits: [...]
+
+# stats 업데이트
+stats:
+  completed: N+1
+```
