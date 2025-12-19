@@ -1,8 +1,9 @@
 """Database session management for NAMS."""
-from pathlib import Path
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, Session
 from contextlib import contextmanager
+from pathlib import Path
+
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, sessionmaker
 
 # Database path
 DATA_DIR = Path(__file__).parent.parent.parent / "data"

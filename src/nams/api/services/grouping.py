@@ -1,10 +1,11 @@
 """Auto-grouping service for NAMS."""
 from collections import defaultdict
 from typing import Optional
-from sqlalchemy.orm import Session
-from sqlalchemy import func
 
-from ..database import NasFile, AssetGroup, Region, EventType, get_db_context
+from sqlalchemy import func
+from sqlalchemy.orm import Session
+
+from ..database import AssetGroup, EventType, NasFile, Region, get_db_context
 
 
 def generate_group_id(

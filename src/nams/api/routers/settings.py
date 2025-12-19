@@ -1,17 +1,17 @@
 """Settings API router for NAMS (Regions, Event Types)."""
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
 from sqlalchemy import func
+from sqlalchemy.orm import Session
 
-from ..database import get_db, Region, EventType, NasFile, AssetGroup
+from ..database import AssetGroup, EventType, NasFile, Region, get_db
 from ..schemas import (
-    RegionResponse,
-    RegionCreate,
-    RegionUpdate,
-    EventTypeResponse,
     EventTypeCreate,
+    EventTypeResponse,
     EventTypeUpdate,
     MessageResponse,
+    RegionCreate,
+    RegionResponse,
+    RegionUpdate,
 )
 
 router = APIRouter()

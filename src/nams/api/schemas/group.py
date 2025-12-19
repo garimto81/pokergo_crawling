@@ -1,7 +1,8 @@
 """Group Pydantic schemas for NAMS API."""
-from typing import Optional
-from pydantic import BaseModel
 from datetime import datetime
+from typing import Optional
+
+from pydantic import BaseModel
 
 
 class AssetGroupBase(BaseModel):
@@ -109,4 +110,5 @@ class GroupFilter(BaseModel):
 
 # Import at the end to avoid circular imports
 from .file import NasFileListResponse
+
 AssetGroupDetailResponse.model_rebuild()

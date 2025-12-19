@@ -1,21 +1,22 @@
 """Category and CategoryEntry API endpoints."""
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
 from sqlalchemy import func
+from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..database.models import Category, CategoryEntry, NasFile
 from ..schemas.category import (
-    CategoryResponse,
-    CategoryListResponse,
+    CategoryEntryBatchVerifyRequest,
+    CategoryEntryDetailResponse,
+    CategoryEntryListResponse,
     CategoryEntryResponse,
     CategoryEntryUpdate,
     CategoryEntryVerifyRequest,
-    CategoryEntryBatchVerifyRequest,
-    CategoryEntryListResponse,
-    CategoryEntryDetailResponse,
+    CategoryListResponse,
+    CategoryResponse,
     EntryFileInfo,
     KPIStats,
     MatchTypeStats,

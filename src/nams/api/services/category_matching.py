@@ -6,16 +6,14 @@ Phase 2: 하이브리드 매칭 엔진
 - source: POKERGO, NAS_ONLY
 """
 import re
-from typing import Optional, NamedTuple
 from dataclasses import dataclass
-from sqlalchemy.orm import Session
+from typing import Optional
+
 from sqlalchemy import func
+from sqlalchemy.orm import Session
 
-from ..database.models import (
-    Category, CategoryEntry, NasFile, PokergoEpisode, Region, EventType
-)
 from ..database import get_db_context
-
+from ..database.models import Category, CategoryEntry, PokergoEpisode
 
 # =============================================================================
 # Match Type Constants

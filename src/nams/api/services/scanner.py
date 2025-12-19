@@ -1,14 +1,15 @@
 """NAS Scanner service for NAMS."""
 import os
 import re
-from pathlib import Path
-from datetime import datetime
 from dataclasses import dataclass
+from datetime import datetime
 from enum import Enum
+from pathlib import Path
 from typing import Optional
+
 from sqlalchemy.orm import Session
 
-from ..database import NasFile, AssetGroup, ExclusionRule, get_db_context
+from ..database import ExclusionRule, NasFile, get_db_context
 
 
 class ScanMode(str, Enum):

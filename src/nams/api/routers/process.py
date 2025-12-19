@@ -1,19 +1,23 @@
 """Processing API router for NAMS (migration, scan, export, extract, group, match)."""
-from fastapi import APIRouter, BackgroundTasks
+from enum import Enum
+from typing import Optional
+
+from fastapi import APIRouter
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
-from typing import Optional
-from enum import Enum
 
-from ..services.migration import run_migration
-from ..services.scanner import run_scan, ScanConfig, ScanMode, FolderType
-from ..services.pattern_engine import run_pattern_extraction
+from ..services.export import (
+    GOOGLE_SHEETS_AVAILABLE,
+    export_to_csv,
+    export_to_google_sheets,
+    export_to_json,
+    get_csv_content,
+)
 from ..services.grouping import run_grouping
 from ..services.matching import run_matching
-from ..services.export import (
-    export_to_csv, export_to_json, export_to_google_sheets,
-    get_csv_content, GOOGLE_SHEETS_AVAILABLE
-)
+from ..services.migration import run_migration
+from ..services.pattern_engine import run_pattern_extraction
+from ..services.scanner import FolderType, ScanConfig, ScanMode, run_scan
 
 router = APIRouter()
 

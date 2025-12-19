@@ -1,13 +1,11 @@
 """Migration service to import JSON data into NAMS database."""
 import json
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
+
 from sqlalchemy.orm import Session
 
-from ..database import (
-    NasFile, AssetGroup, PokergoEpisode, Region, EventType,
-    get_db_context
-)
+from ..database import AssetGroup, EventType, NasFile, PokergoEpisode, Region, get_db_context
 
 # Data paths
 DATA_DIR = Path("D:/AI/claude01/pokergo_crawling/data")

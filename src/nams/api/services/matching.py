@@ -2,9 +2,10 @@
 import re
 from difflib import SequenceMatcher
 from typing import Optional
+
 from sqlalchemy.orm import Session
 
-from ..database import AssetGroup, PokergoEpisode, Region, EventType, NasFile, get_db_context
+from ..database import AssetGroup, EventType, NasFile, PokergoEpisode, Region, get_db_context
 
 
 def normalize_title(title: str) -> str:

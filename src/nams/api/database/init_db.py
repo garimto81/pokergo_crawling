@@ -1,5 +1,5 @@
 """Database initialization and seed data for NAMS."""
-from .models import Base, Pattern, Region, EventType, PokergoEpisode, ExclusionRule
+from .models import Base, EventType, ExclusionRule, Pattern, Region
 from .session import engine, get_db_context
 
 

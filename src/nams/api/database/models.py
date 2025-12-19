@@ -1,11 +1,19 @@
 """SQLAlchemy models for NAMS database."""
 from datetime import datetime
-from typing import Optional, List
+
 from sqlalchemy import (
-    Column, Integer, String, Text, Float, Boolean, ForeignKey,
-    DateTime, BigInteger, Index, create_engine
+    BigInteger,
+    Boolean,
+    Column,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
 )
-from sqlalchemy.orm import relationship, declarative_base
+from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()
 

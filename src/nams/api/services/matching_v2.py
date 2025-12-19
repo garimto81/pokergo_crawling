@@ -8,10 +8,11 @@
 - 컬렉션/시즌 헤더 제외
 """
 import re
-from typing import Optional, NamedTuple
+from typing import NamedTuple, Optional
+
 from sqlalchemy.orm import Session
 
-from ..database import AssetGroup, PokergoEpisode, Region, EventType, get_db_context
+from ..database import AssetGroup, EventType, PokergoEpisode, Region, get_db_context
 
 
 def is_actual_episode(title: str) -> bool:
