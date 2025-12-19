@@ -1,0 +1,67 @@
+# Agent Result: UI 편집 패턴 설계
+task_id: task-003
+agent_id: agent-explore-003
+status: completed
+completed_at: 2025-12-19T00:00:00Z
+
+analysis:
+  title: "UI 편집 패턴 및 마이그레이션 설계"
+
+  current_ui:
+    framework: "React 19 + Vite + TailwindCSS + Zustand"
+    pages: ["Dashboard", "ContentExplorer", "Files", "Groups", "Entries", "Patterns", "Settings", "Validator"]
+    editing:
+      - "Groups: Catalog Title inline edit"
+      - "Entries: verify action"
+      - "Patterns: create/modify"
+
+  recommended_patterns:
+    계층_1_인라인:
+      name: "인라인 편집"
+      use_for: ["Catalog Title", "Event Name", "Notes"]
+      ux: "빠른 단일 필드 수정"
+
+    계층_2_모달:
+      name: "편집 모달"
+      use_for: ["Entry 상세 편집 (다중 필드)"]
+      fields:
+        required: ["display_title", "year", "event_type"]
+        optional: ["sequence", "notes"]
+        readonly: ["entry_code", "pokergo_title"]
+
+    계층_3_패널:
+      name: "슬라이드 패널"
+      use_for: ["카테고리 재할당", "미리보기 + 비교"]
+
+    계층_4_배치:
+      name: "일괄 편집"
+      use_for: ["다중 entries 상태 변경", "대량 verify"]
+      flow: "선택 → 액션 → Preview → Apply"
+
+  migration_design:
+    audit_log:
+      table: "entry_audit_log"
+      columns: ["entry_id", "field_name", "old_value", "new_value", "changed_at", "changed_by"]
+
+    workflow:
+      states: ["DRAFT", "PENDING_REVIEW", "APPROVED", "REJECTED"]
+
+    export_formats:
+      - "CSV (entry_code, display_title, year, ...)"
+      - "JSON (categories + entries + audit_log)"
+
+  validation_rules:
+    display_title:
+      required: true
+      min_length: 5
+      max_length: 300
+      forbidden_chars: "/\\*?:<>|"
+    year:
+      required: true
+      range: [1973, 2099]
+
+  implementation_phases:
+    phase_1: "EditEntryModal + 유효성 검사"
+    phase_2: "EditCategoryModal + 일괄 편집"
+    phase_3: "CSV/JSON 내보내기 + 승인 워크플로우"
+    phase_4: "검색 기반 카테고리 선택"

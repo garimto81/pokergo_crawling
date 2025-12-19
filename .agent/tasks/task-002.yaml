@@ -1,0 +1,23 @@
+# Supervisor가 작성
+id: task-002
+created_at: 2025-12-19T00:00:00Z
+status: assigned
+
+task:
+  description: "Google Sheets 연동 방식 비교 분석"
+  type: research
+  scope:
+    - "Google Sheets API 실시간 연동 vs 배치 동기화"
+    - "충돌 해결 전략 (동시 편집 시)"
+    - "오프라인/온라인 시나리오"
+    - "기존 구현 분석 (export_4sheets.py)"
+  expected_output:
+    format: comparison_table
+    save_to: .agent/results/result-002.yaml
+
+agent:
+  type: research
+  model: sonnet
+  timeout: 300
+
+dependencies: []

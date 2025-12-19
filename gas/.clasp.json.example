@@ -1,0 +1,5 @@
+{
+  "scriptId": "여기에_Google_Apps_Script_ID_입력",
+  "rootDir": "./",
+  "projectId": "선택사항_GCP_프로젝트_ID"
+}

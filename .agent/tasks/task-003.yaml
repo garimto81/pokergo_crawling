@@ -1,0 +1,23 @@
+# Supervisor가 작성
+id: task-003
+created_at: 2025-12-19T00:00:00Z
+status: assigned
+
+task:
+  description: "UI 편집 패턴 및 마이그레이션 설계"
+  type: research
+  scope:
+    - "현재 NAMS UI 구조 분석"
+    - "인라인 편집 vs 전용 편집 모달 비교"
+    - "카테고리/제목 편집 최적 UX"
+    - "변경사항 추적 및 마이그레이션 데이터 구조"
+  expected_output:
+    format: design_proposal
+    save_to: .agent/results/result-003.yaml
+
+agent:
+  type: research
+  model: sonnet
+  timeout: 300
+
+dependencies: []
