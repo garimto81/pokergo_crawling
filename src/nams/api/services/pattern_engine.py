@@ -1,7 +1,6 @@
 """Pattern matching engine for extracting metadata from full paths."""
 import re
 from dataclasses import dataclass
-from typing import Optional
 
 from sqlalchemy.orm import Session
 
@@ -12,27 +11,27 @@ from ..database import EventType, NasFile, Pattern, Region, get_db_context
 class ExtractionResult:
     """Result of pattern extraction."""
     matched: bool
-    pattern_id: Optional[int] = None
-    pattern_name: Optional[str] = None
-    year: Optional[int] = None
-    region_id: Optional[int] = None
-    region_code: Optional[str] = None
-    event_type_id: Optional[int] = None
-    event_type_code: Optional[str] = None
-    episode: Optional[int] = None
+    pattern_id: int | None = None
+    pattern_name: str | None = None
+    year: int | None = None
+    region_id: int | None = None
+    region_code: str | None = None
+    event_type_id: int | None = None
+    event_type_code: str | None = None
+    episode: int | None = None
     confidence: float = 0.0
 
     # Extended metadata (new fields)
-    stage: Optional[str] = None        # D1A, D2, FT, FINAL, S1
-    event_num: Optional[int] = None    # Event #13 -> 13
-    season: Optional[int] = None       # PAD S12 -> 12
-    buyin: Optional[str] = None        # $100K, $5K
-    gtd: Optional[str] = None          # $5M GTD -> 5M
-    version: Optional[str] = None      # NC (No Commentary), NB, CLEAN
-    part: Optional[int] = None         # Part number (for CLASSIC era: Part 1, Part 2)
+    stage: str | None = None        # D1A, D2, FT, FINAL, S1
+    event_num: int | None = None    # Event #13 -> 13
+    season: int | None = None       # PAD S12 -> 12
+    buyin: str | None = None        # $100K, $5K
+    gtd: str | None = None          # $5M GTD -> 5M
+    version: str | None = None      # NC (No Commentary), NB, CLEAN
+    part: int | None = None         # Part number (for CLASSIC era: Part 1, Part 2)
 
 
-def get_region_id(db: Session, code: str) -> Optional[int]:
+def get_region_id(db: Session, code: str) -> int | None:
     """Get region ID by code."""
     if not code:
         return None
@@ -40,7 +39,7 @@ def get_region_id(db: Session, code: str) -> Optional[int]:
     return region.id if region else None
 
 
-def get_event_type_id(db: Session, code: str) -> Optional[int]:
+def get_event_type_id(db: Session, code: str) -> int | None:
     """Get event type ID by code."""
     if not code:
         return None
@@ -50,7 +49,7 @@ def get_event_type_id(db: Session, code: str) -> Optional[int]:
     return event_type.id if event_type else None
 
 
-def extract_year_from_path(path: str) -> Optional[int]:
+def extract_year_from_path(path: str) -> int | None:
     """Extract year from full path.
 
     Priority:
@@ -132,7 +131,7 @@ def extract_year_from_path(path: str) -> Optional[int]:
     return None
 
 
-def extract_stage_from_path(path: str) -> Optional[str]:
+def extract_stage_from_path(path: str) -> str | None:
     """Extract stage (Day 1A, Final Table, etc.) from path."""
     # Final Table first (to catch "Final Table Day X" before generic "Day X")
     if re.search(r'Final\s*Table', path, re.I):
@@ -157,7 +156,7 @@ def extract_stage_from_path(path: str) -> Optional[str]:
     return None
 
 
-def extract_event_num_from_path(path: str) -> Optional[int]:
+def extract_event_num_from_path(path: str) -> int | None:
     """Extract event number (Event #13) from path."""
     match = re.search(r'Event\s*#?(\d+)', path, re.I)
     if match:
@@ -169,7 +168,7 @@ def extract_event_num_from_path(path: str) -> Optional[int]:
     return None
 
 
-def extract_buyin_from_path(path: str) -> Optional[str]:
+def extract_buyin_from_path(path: str) -> str | None:
     """Extract buy-in amount from path."""
     # $100K, $5K, $1.5K, $10,000
     match = re.search(r'\$(\d+(?:[.,]\d+)?[KM]?)', path, re.I)
@@ -179,7 +178,7 @@ def extract_buyin_from_path(path: str) -> Optional[str]:
     return None
 
 
-def extract_gtd_from_path(path: str) -> Optional[str]:
+def extract_gtd_from_path(path: str) -> str | None:
     """Extract GTD amount from path."""
     match = re.search(r'\$(\d+[MK]?)\s*GTD', path, re.I)
     if match:
@@ -187,7 +186,7 @@ def extract_gtd_from_path(path: str) -> Optional[str]:
     return None
 
 
-def extract_version_from_path(path: str) -> Optional[str]:
+def extract_version_from_path(path: str) -> str | None:
     """Extract version info (No Commentary, Clean, etc.) from path."""
     if re.search(r'NO\s*COMMENTARY', path, re.I):
         return "NC"
@@ -198,7 +197,7 @@ def extract_version_from_path(path: str) -> Optional[str]:
     return None
 
 
-def extract_episode_from_day_part(path: str) -> Optional[int]:
+def extract_episode_from_day_part(path: str) -> int | None:
     """Extract episode number from Day/Part patterns.
 
     Day mapping (per MATCHING_RULES.md):
@@ -228,7 +227,7 @@ def extract_episode_from_day_part(path: str) -> Optional[int]:
     return None
 
 
-def extract_part_from_path(path: str, year: Optional[int] = None) -> Optional[int]:
+def extract_part_from_path(path: str, year: int | None = None) -> int | None:
     """Extract Part number from path for CLASSIC era files.
 
     CLASSIC Era (1973-2002) files may have Part numbers that indicate
@@ -279,7 +278,7 @@ def extract_part_from_path(path: str, year: Optional[int] = None) -> Optional[in
     return None
 
 
-def extract_episode_from_path(path: str, pattern_name: str) -> Optional[int]:
+def extract_episode_from_path(path: str, pattern_name: str) -> int | None:
     """Extract episode number based on pattern type."""
     # WS{YY}_{TYPE}{EP} format: WS11_ME01_NB.mp4, WS12_BR25.mxf
     if pattern_name == "WSOP_WS_FORMAT":
@@ -437,7 +436,7 @@ def extract_episode_from_path(path: str, pattern_name: str) -> Optional[int]:
     return None
 
 
-def extract_season_from_path(path: str) -> Optional[int]:
+def extract_season_from_path(path: str) -> int | None:
     """Extract season number (PAD S12)."""
     match = re.search(r'[Ss](\d{2})', path)
     if match:
@@ -445,7 +444,7 @@ def extract_season_from_path(path: str) -> Optional[int]:
     return None
 
 
-def extract_region_from_super_circuit(path: str) -> Optional[str]:
+def extract_region_from_super_circuit(path: str) -> str | None:
     """Extract region from WSOP Super Circuit path (London, Cyprus)."""
     if re.search(r'London', path, re.I):
         return "LONDON"
@@ -454,7 +453,7 @@ def extract_region_from_super_circuit(path: str) -> Optional[str]:
     return None
 
 
-def detect_event_type_from_path(path: str) -> Optional[str]:
+def detect_event_type_from_path(path: str) -> str | None:
     """Detect event type from path keywords.
 
     Checks both filename patterns and folder structure.
@@ -570,7 +569,7 @@ def extract_metadata(db: Session, full_path: str, filename: str = None) -> Extra
 
     # Get active patterns ordered by priority
     patterns = db.query(Pattern).filter(
-        Pattern.is_active == True
+        Pattern.is_active
     ).order_by(Pattern.priority).all()
 
     for pattern in patterns:
@@ -701,7 +700,7 @@ def process_unmatched_files(db: Session) -> dict:
 
     # Get files without pattern match
     files = db.query(NasFile).filter(
-        NasFile.matched_pattern_id == None
+        NasFile.matched_pattern_id is None
     ).all()
 
     stats['processed'] = len(files)

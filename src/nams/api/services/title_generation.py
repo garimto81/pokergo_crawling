@@ -6,19 +6,17 @@ Phase 3: 제목 생성 및 개선 서비스
 """
 import os
 import re
+from dataclasses import dataclass
 from pathlib import Path
 
-# Load .env file
 from dotenv import load_dotenv
-
-env_path = Path(__file__).parent.parent.parent.parent.parent / '.env'
-load_dotenv(env_path)
-from dataclasses import dataclass
-from typing import Optional
-
 from sqlalchemy.orm import Session
 
 from ..database.models import Category, CategoryEntry
+
+# Load .env file
+env_path = Path(__file__).parent.parent.parent.parent.parent / ".env"
+load_dotenv(env_path)
 
 
 @dataclass
@@ -137,7 +135,7 @@ def generate_title_ai(
     entry: CategoryEntry,
     category: Category,
     pokergo_context: list[dict],
-) -> Optional[str]:
+) -> str | None:
     """AI 기반 제목 생성 (Gemini).
 
     환경변수 GOOGLE_API_KEY가 필요합니다.

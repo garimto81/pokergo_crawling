@@ -1,6 +1,5 @@
 """Pydantic schemas for Category and CategoryEntry."""
 from datetime import datetime
-from typing import List, Optional
 
 from pydantic import BaseModel
 
@@ -13,19 +12,19 @@ class CategoryBase(BaseModel):
     code: str
     name: str
     year: int
-    region: Optional[str] = None
-    source: Optional[str] = 'NAS_ONLY'
-    pokergo_category: Optional[str] = None
-    description: Optional[str] = None
+    region: str | None = None
+    source: str | None = 'NAS_ONLY'
+    pokergo_category: str | None = None
+    description: str | None = None
 
 
 class CategoryResponse(CategoryBase):
     """Category 응답 스키마."""
     id: int
-    entry_count: Optional[int] = 0
-    file_count: Optional[int] = 0
-    total_size_gb: Optional[float] = 0.0
-    created_at: Optional[datetime] = None
+    entry_count: int | None = 0
+    file_count: int | None = 0
+    total_size_gb: float | None = 0.0
+    created_at: datetime | None = None
 
     class Config:
         from_attributes = True
@@ -33,7 +32,7 @@ class CategoryResponse(CategoryBase):
 
 class CategoryListResponse(BaseModel):
     """Category 목록 응답."""
-    items: List[CategoryResponse]
+    items: list[CategoryResponse]
     total: int
     page: int
     page_size: int
@@ -46,31 +45,31 @@ class CategoryListResponse(BaseModel):
 class CategoryEntryBase(BaseModel):
     """CategoryEntry 기본 스키마."""
     entry_code: str
-    display_title: Optional[str] = None
+    display_title: str | None = None
     year: int
-    event_type: Optional[str] = None
-    event_name: Optional[str] = None
-    sequence: Optional[int] = None
-    sequence_type: Optional[str] = None
+    event_type: str | None = None
+    event_name: str | None = None
+    sequence: int | None = None
+    sequence_type: str | None = None
 
 
 class CategoryEntryResponse(CategoryEntryBase):
     """CategoryEntry 응답 스키마."""
     id: int
-    category_id: Optional[int] = None
-    source: Optional[str] = None
-    pokergo_ep_id: Optional[str] = None
-    pokergo_title: Optional[str] = None
-    match_type: Optional[str] = None
-    match_score: Optional[float] = None
+    category_id: int | None = None
+    source: str | None = None
+    pokergo_ep_id: str | None = None
+    pokergo_title: str | None = None
+    match_type: str | None = None
+    match_score: float | None = None
     verified: bool = False
-    verified_at: Optional[datetime] = None
-    verified_by: Optional[str] = None
-    notes: Optional[str] = None
-    file_count: Optional[int] = 0
-    total_size_bytes: Optional[int] = 0
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+    verified_at: datetime | None = None
+    verified_by: str | None = None
+    notes: str | None = None
+    file_count: int | None = 0
+    total_size_bytes: int | None = 0
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
     class Config:
         from_attributes = True
@@ -78,28 +77,28 @@ class CategoryEntryResponse(CategoryEntryBase):
 
 class CategoryEntryUpdate(BaseModel):
     """CategoryEntry 수정 스키마."""
-    display_title: Optional[str] = None
-    pokergo_ep_id: Optional[str] = None
-    match_type: Optional[str] = None
-    verified: Optional[bool] = None
-    notes: Optional[str] = None
+    display_title: str | None = None
+    pokergo_ep_id: str | None = None
+    match_type: str | None = None
+    verified: bool | None = None
+    notes: str | None = None
 
 
 class CategoryEntryVerifyRequest(BaseModel):
     """검증 요청 스키마."""
-    verified_by: Optional[str] = 'system'
-    notes: Optional[str] = None
+    verified_by: str | None = 'system'
+    notes: str | None = None
 
 
 class CategoryEntryBatchVerifyRequest(BaseModel):
     """일괄 검증 요청 스키마."""
-    entry_ids: List[int]
-    verified_by: Optional[str] = 'system'
+    entry_ids: list[int]
+    verified_by: str | None = 'system'
 
 
 class CategoryEntryListResponse(BaseModel):
     """CategoryEntry 목록 응답."""
-    items: List[CategoryEntryResponse]
+    items: list[CategoryEntryResponse]
     total: int
     page: int
     page_size: int
@@ -112,12 +111,12 @@ class CategoryEntryListResponse(BaseModel):
 class EntryFileInfo(BaseModel):
     """Entry에 연결된 파일 정보."""
     id: int
-    file_id: Optional[str] = None
+    file_id: str | None = None
     filename: str
-    drive: Optional[str] = None
-    folder: Optional[str] = None
+    drive: str | None = None
+    folder: str | None = None
     size_bytes: int
-    role: Optional[str] = None
+    role: str | None = None
     is_excluded: bool = False
 
     class Config:
@@ -126,8 +125,8 @@ class EntryFileInfo(BaseModel):
 
 class CategoryEntryDetailResponse(CategoryEntryResponse):
     """CategoryEntry 상세 응답 (파일 포함)."""
-    category_name: Optional[str] = None
-    files: List[EntryFileInfo] = []
+    category_name: str | None = None
+    files: list[EntryFileInfo] = []
 
 
 # =============================================================================
@@ -173,7 +172,7 @@ class TitleGenerationResult(BaseModel):
     ai_generated: int = 0
     pattern_generated: int = 0
     unchanged: int = 0
-    samples: List[dict] = []
+    samples: list[dict] = []
 
 
 # =============================================================================
@@ -184,10 +183,10 @@ class TreeEntry(BaseModel):
     """트리 내 Entry 항목."""
     id: int
     entry_code: str
-    display_title: Optional[str] = None
-    pokergo_title: Optional[str] = None
-    match_type: Optional[str] = None
-    match_score: Optional[float] = None
+    display_title: str | None = None
+    pokergo_title: str | None = None
+    match_type: str | None = None
+    match_score: float | None = None
     file_count: int = 0
     total_size_gb: float = 0.0
 
@@ -199,7 +198,7 @@ class TreeEventType(BaseModel):
     entry_count: int = 0
     exact_count: int = 0
     none_count: int = 0
-    entries: List[TreeEntry] = []
+    entries: list[TreeEntry] = []
 
 
 class TreeCategory(BaseModel):
@@ -207,11 +206,11 @@ class TreeCategory(BaseModel):
     id: int
     code: str
     name: str
-    region: Optional[str] = None
+    region: str | None = None
     entry_count: int = 0
     exact_count: int = 0
     none_count: int = 0
-    event_types: List[TreeEventType] = []
+    event_types: list[TreeEventType] = []
 
 
 class TreeYear(BaseModel):
@@ -221,12 +220,12 @@ class TreeYear(BaseModel):
     exact_count: int = 0
     none_count: int = 0
     total_size_gb: float = 0.0
-    categories: List[TreeCategory] = []
+    categories: list[TreeCategory] = []
 
 
 class ContentTreeResponse(BaseModel):
     """Content Explorer 트리 전체 응답."""
-    years: List[TreeYear]
+    years: list[TreeYear]
     summary: dict = {}
 
 

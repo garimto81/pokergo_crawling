@@ -1,6 +1,5 @@
 """Group Pydantic schemas for NAMS API."""
 from datetime import datetime
-from typing import Optional
 
 from pydantic import BaseModel
 
@@ -9,9 +8,9 @@ class AssetGroupBase(BaseModel):
     """Base asset group schema."""
     group_id: str
     year: int
-    region_id: Optional[int] = None
-    event_type_id: Optional[int] = None
-    episode: Optional[int] = None
+    region_id: int | None = None
+    event_type_id: int | None = None
+    episode: int | None = None
 
 
 class AssetGroupCreate(AssetGroupBase):
@@ -21,26 +20,26 @@ class AssetGroupCreate(AssetGroupBase):
 
 class AssetGroupUpdate(BaseModel):
     """Asset group update schema."""
-    year: Optional[int] = None
-    region_id: Optional[int] = None
-    event_type_id: Optional[int] = None
-    episode: Optional[int] = None
-    pokergo_episode_id: Optional[str] = None
-    pokergo_title: Optional[str] = None
-    pokergo_match_score: Optional[float] = None
-    catalog_title: Optional[str] = None
-    catalog_title_manual: Optional[bool] = None
+    year: int | None = None
+    region_id: int | None = None
+    event_type_id: int | None = None
+    episode: int | None = None
+    pokergo_episode_id: str | None = None
+    pokergo_title: str | None = None
+    pokergo_match_score: float | None = None
+    catalog_title: str | None = None
+    catalog_title_manual: bool | None = None
 
 
 class AssetGroupResponse(AssetGroupBase):
     """Asset group response schema."""
     id: int
-    pokergo_episode_id: Optional[str] = None
-    pokergo_title: Optional[str] = None
-    pokergo_match_score: Optional[float] = None
-    catalog_title: Optional[str] = None
+    pokergo_episode_id: str | None = None
+    pokergo_title: str | None = None
+    pokergo_match_score: float | None = None
+    catalog_title: str | None = None
     catalog_title_manual: bool = False
-    match_category: Optional[str] = None  # MATCHED, NAS_ONLY_HISTORIC, NAS_ONLY_MODERN
+    match_category: str | None = None  # MATCHED, NAS_ONLY_HISTORIC, NAS_ONLY_MODERN
     file_count: int = 0
     total_size_bytes: int = 0
     has_backup: bool = False
@@ -48,9 +47,9 @@ class AssetGroupResponse(AssetGroupBase):
     updated_at: datetime
 
     # Expanded fields
-    region_code: Optional[str] = None
-    event_type_code: Optional[str] = None
-    total_size_formatted: Optional[str] = None
+    region_code: str | None = None
+    event_type_code: str | None = None
+    total_size_formatted: str | None = None
 
     class Config:
         from_attributes = True
@@ -61,11 +60,11 @@ class AssetGroupListResponse(BaseModel):
     id: int
     group_id: str
     year: int
-    region_code: Optional[str] = None
-    event_type_code: Optional[str] = None
-    episode: Optional[int] = None
-    catalog_title: Optional[str] = None
-    match_category: Optional[str] = None  # MATCHED, NAS_ONLY_HISTORIC, NAS_ONLY_MODERN
+    region_code: str | None = None
+    event_type_code: str | None = None
+    episode: int | None = None
+    catalog_title: str | None = None
+    match_category: str | None = None  # MATCHED, NAS_ONLY_HISTORIC, NAS_ONLY_MODERN
     file_count: int = 0
     total_size_formatted: str = "0 B"
     has_backup: bool = False
@@ -99,16 +98,16 @@ class GroupSplitRequest(BaseModel):
 
 class GroupFilter(BaseModel):
     """Group filter parameters."""
-    year: Optional[int] = None
-    region_id: Optional[int] = None
-    event_type_id: Optional[int] = None
-    has_pokergo_match: Optional[bool] = None
-    has_backup: Optional[bool] = None
-    min_file_count: Optional[int] = None
-    search: Optional[str] = None
+    year: int | None = None
+    region_id: int | None = None
+    event_type_id: int | None = None
+    has_pokergo_match: bool | None = None
+    has_backup: bool | None = None
+    min_file_count: int | None = None
+    search: str | None = None
 
 
 # Import at the end to avoid circular imports
-from .file import NasFileListResponse
+from .file import NasFileListResponse  # noqa: E402
 
 AssetGroupDetailResponse.model_rebuild()

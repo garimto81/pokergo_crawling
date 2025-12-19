@@ -1,5 +1,5 @@
 """Common Pydantic schemas for NAMS API."""
-from typing import Generic, Optional, TypeVar
+from typing import Generic, TypeVar
 
 from pydantic import BaseModel
 
@@ -30,7 +30,7 @@ class MessageResponse(BaseModel):
 class ErrorResponse(BaseModel):
     """Error response."""
     error: str
-    detail: Optional[str] = None
+    detail: str | None = None
 
 
 # Region schemas
@@ -38,7 +38,7 @@ class RegionBase(BaseModel):
     """Base region schema."""
     code: str
     name: str
-    description: Optional[str] = None
+    description: str | None = None
     is_active: bool = True
 
 
@@ -49,10 +49,10 @@ class RegionCreate(RegionBase):
 
 class RegionUpdate(BaseModel):
     """Region update schema."""
-    code: Optional[str] = None
-    name: Optional[str] = None
-    description: Optional[str] = None
-    is_active: Optional[bool] = None
+    code: str | None = None
+    name: str | None = None
+    description: str | None = None
+    is_active: bool | None = None
 
 
 class RegionResponse(RegionBase):
@@ -68,7 +68,7 @@ class EventTypeBase(BaseModel):
     """Base event type schema."""
     code: str
     name: str
-    description: Optional[str] = None
+    description: str | None = None
     is_active: bool = True
 
 
@@ -79,10 +79,10 @@ class EventTypeCreate(EventTypeBase):
 
 class EventTypeUpdate(BaseModel):
     """Event type update schema."""
-    code: Optional[str] = None
-    name: Optional[str] = None
-    description: Optional[str] = None
-    is_active: Optional[bool] = None
+    code: str | None = None
+    name: str | None = None
+    description: str | None = None
+    is_active: bool | None = None
 
 
 class EventTypeResponse(EventTypeBase):

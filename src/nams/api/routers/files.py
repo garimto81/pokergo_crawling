@@ -1,5 +1,4 @@
 """File management API router for NAMS."""
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func
@@ -33,14 +32,14 @@ def format_size(bytes_size: int) -> str:
 async def list_files(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
-    year: Optional[int] = None,
-    region_id: Optional[int] = None,
-    event_type_id: Optional[int] = None,
-    group_id: Optional[int] = None,
-    has_group: Optional[bool] = None,
-    is_primary: Optional[bool] = None,
-    is_manual_override: Optional[bool] = None,
-    search: Optional[str] = None,
+    year: int | None = None,
+    region_id: int | None = None,
+    event_type_id: int | None = None,
+    group_id: int | None = None,
+    has_group: bool | None = None,
+    is_primary: bool | None = None,
+    is_manual_override: bool | None = None,
+    search: str | None = None,
     db: Session = Depends(get_db)
 ):
     """Get paginated file list with filters."""

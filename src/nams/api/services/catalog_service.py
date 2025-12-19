@@ -1,6 +1,5 @@
 """Catalog service for generating standard titles for NAS groups."""
 import re
-from typing import Optional
 
 from sqlalchemy.orm import Session
 
@@ -39,17 +38,26 @@ HISTORIC_CONTENT_PATTERNS = {
     # WSOPE08 series (2008)
     r"WSOPE08_Episode_(\d+)": lambda m: f"WSOP Europe 2008 | Episode {int(m.group(1))}",
     # WSOPE09-10 series
-    r"WSOPE(\d{2})_Episode_(\d+)": lambda m: f"WSOP Europe 20{m.group(1)} | Episode {int(m.group(2))}",
+    r"WSOPE(\d{2})_Episode_(\d+)": (
+        lambda m: f"WSOP Europe 20{m.group(1)} | Episode {int(m.group(2))}"
+    ),
     # wsope-YYYY-XXk-type-ft-NNN pattern
-    r"wsope-(\d{4})-(\d+k?)-([a-z]+)-ft-(\d+)": lambda m: f"WSOP Europe {m.group(1)} €{m.group(2).upper()} {m.group(3).upper()} | Final Table {int(m.group(4))}",
+    r"wsope-(\d{4})-(\d+k?)-([a-z]+)-ft-(\d+)": (
+        lambda m: (
+            f"WSOP Europe {m.group(1)} €{m.group(2).upper()} "
+            f"{m.group(3).upper()} | Final Table {int(m.group(4))}"
+        )
+    ),
     # WSOP_YYYY for CLASSIC era
-    r"WSOP[_\-](\d{4})\.": lambda m: f"WSOP {m.group(1)} Main Event" if int(m.group(1)) <= 2002 else None,
+    r"WSOP[_\-](\d{4})\.": (
+        lambda m: f"WSOP {m.group(1)} Main Event" if int(m.group(1)) <= 2002 else None
+    ),
     # wsop-YYYY-me pattern
     r"wsop-(\d{4})-me": lambda m: f"WSOP {m.group(1)} Main Event",
 }
 
 
-def generate_title_from_filename(filename: str) -> Optional[str]:
+def generate_title_from_filename(filename: str) -> str | None:
     """Generate catalog title directly from filename patterns (D01 fix).
 
     This handles historic content that doesn't have PokerGO metadata.
@@ -231,9 +239,9 @@ def generate_titles_for_unmatched(db: Session) -> dict:
     """
     # Get unmatched groups without catalog_title
     unmatched = db.query(AssetGroup).filter(
-        AssetGroup.pokergo_episode_id == None,
-        (AssetGroup.catalog_title == None) | (AssetGroup.catalog_title == ""),
-        AssetGroup.catalog_title_manual == False
+        AssetGroup.pokergo_episode_id is None,
+        (AssetGroup.catalog_title is None) | (AssetGroup.catalog_title == ""),
+        not AssetGroup.catalog_title_manual
     ).all()
 
     generated = 0
@@ -269,12 +277,12 @@ def generate_titles_for_all(db: Session, overwrite: bool = False) -> dict:
     """
     if overwrite:
         groups = db.query(AssetGroup).filter(
-            AssetGroup.catalog_title_manual == False
+            not AssetGroup.catalog_title_manual
         ).all()
     else:
         groups = db.query(AssetGroup).filter(
-            (AssetGroup.catalog_title == None) | (AssetGroup.catalog_title == ""),
-            AssetGroup.catalog_title_manual == False
+            (AssetGroup.catalog_title is None) | (AssetGroup.catalog_title == ""),
+            not AssetGroup.catalog_title_manual
         ).all()
 
     generated = 0

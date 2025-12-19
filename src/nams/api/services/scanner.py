@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Optional
 
 from sqlalchemy.orm import Session
 
@@ -45,13 +44,13 @@ VIDEO_EXTENSIONS = {'.mp4', '.mkv', '.mov', '.avi', '.wmv', '.m4v', '.mxf'}
 class ExclusionCheckResult:
     """Result of exclusion check."""
     excluded: bool
-    reason: Optional[str] = None
-    rule_id: Optional[int] = None
+    reason: str | None = None
+    rule_id: int | None = None
 
 
 def get_active_exclusion_rules(db: Session) -> list[ExclusionRule]:
     """Get all active exclusion rules from database."""
-    return db.query(ExclusionRule).filter(ExclusionRule.is_active == True).all()
+    return db.query(ExclusionRule).filter(ExclusionRule.is_active).all()
 
 
 def check_exclusion_rules(
@@ -59,7 +58,7 @@ def check_exclusion_rules(
     filename: str,
     size_bytes: int,
     full_path: str,
-    duration_sec: Optional[int] = None
+    duration_sec: int | None = None
 ) -> ExclusionCheckResult:
     """Check if a file should be excluded based on active rules.
 
@@ -131,7 +130,11 @@ def parse_filename(filepath: Path) -> dict:
         "filename": filepath.name,
         "extension": filepath.suffix.lower(),
         "size_bytes": filepath.stat().st_size if filepath.exists() else 0,
-        "modified_at": datetime.fromtimestamp(filepath.stat().st_mtime).isoformat() if filepath.exists() else None,
+        "modified_at": (
+            datetime.fromtimestamp(filepath.stat().st_mtime).isoformat()
+            if filepath.exists()
+            else None
+        ),
     }
 
     # Pattern: WSOP14_APAC_ME_01 or similar
@@ -337,7 +340,8 @@ def run_scan(config: ScanConfig) -> dict:
 
         db.commit()
 
-    print(f"[Scan] Flagged {stats['excluded_files']} files as excluded (stored with is_excluded=True)")
+    excluded_count = stats['excluded_files']
+    print(f"[Scan] Flagged {excluded_count} files as excluded (stored with is_excluded=True)")
     return stats
 
 

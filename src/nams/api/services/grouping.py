@@ -1,6 +1,5 @@
 """Auto-grouping service for NAMS."""
 from collections import defaultdict
-from typing import Optional
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -10,11 +9,11 @@ from ..database import AssetGroup, EventType, NasFile, Region, get_db_context
 
 def generate_group_id(
     year: int,
-    region_code: Optional[str],
-    event_type_code: Optional[str],
-    episode: Optional[int],
-    event_num: Optional[int] = None,
-    part: Optional[int] = None,
+    region_code: str | None,
+    event_type_code: str | None,
+    episode: int | None,
+    event_num: int | None = None,
+    part: int | None = None,
 ) -> str:
     """Generate group ID from metadata.
 
@@ -58,13 +57,13 @@ def generate_group_id(
 def get_or_create_group(
     db: Session,
     year: int,
-    region_id: Optional[int],
-    event_type_id: Optional[int],
-    episode: Optional[int],
-    region_code: Optional[str] = None,
-    event_type_code: Optional[str] = None,
-    event_num: Optional[int] = None,
-    part: Optional[int] = None,
+    region_id: int | None,
+    event_type_id: int | None,
+    episode: int | None,
+    region_code: str | None = None,
+    event_type_code: str | None = None,
+    event_num: int | None = None,
+    part: int | None = None,
 ) -> AssetGroup:
     """Get existing group or create new one.
 
@@ -166,8 +165,8 @@ def run_auto_grouping(db: Session) -> dict:
 
     # Get files without group that have year
     files = db.query(NasFile).filter(
-        NasFile.asset_group_id == None,
-        NasFile.year != None
+        NasFile.asset_group_id is None,
+        NasFile.year is not None
     ).all()
 
     stats['processed'] = len(files)
@@ -179,7 +178,14 @@ def run_auto_grouping(db: Session) -> dict:
         # For CLASSIC era (1973-2002), include part in grouping key
         # This separates Part 1 from Part 2 as different content
         part_key = file.part if file.year and file.year <= 2002 else None
-        key = (file.year, file.region_id, file.event_type_id, file.episode, file.event_num, part_key)
+        key = (
+            file.year,
+            file.region_id,
+            file.event_type_id,
+            file.episode,
+            file.event_num,
+            part_key,
+        )
         file_groups[key].append(file)
 
     # Get region/event_type codes for group ID generation
@@ -188,7 +194,14 @@ def run_auto_grouping(db: Session) -> dict:
 
     # Process each group
     groups_created = set()
-    for (year, region_id, event_type_id, episode, event_num, part), group_files in file_groups.items():
+    for (
+        year,
+        region_id,
+        event_type_id,
+        episode,
+        event_num,
+        part,
+    ), group_files in file_groups.items():
         if not year:
             stats['skipped'] += len(group_files)
             continue
