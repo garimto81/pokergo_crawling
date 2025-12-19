@@ -4,7 +4,7 @@
 
 version: "1.0"
 project: "pokergo_crawling"
-updated_at: "2025-12-19T20:00:00"
+updated_at: "2025-12-19T21:00:00"
 
 # 현재 진행 중인 작업
 current_task: null
@@ -23,16 +23,8 @@ tasks:
     result:
       success: true
       message: "Validator 스크립트 4개 생성, export.py 리팩토링 완료"
-      files_changed:
-        - "scripts/daily_scan.py"
-        - "scripts/sync_sheets.py"
-        - "src/nams/api/services/change_tracker.py"
-        - "docs/SCHEDULER_SETUP.md"
-        - "src/nams/api/services/export.py"
-      commits:
-        - "9e4be74"
-        - "3c21d1f"
       pr: "#3"
+      merged: true
 
   - id: "TASK-002"
     title: "process.py 리팩토링"
@@ -46,15 +38,12 @@ tasks:
     result:
       success: true
       message: "Summary 템플릿 적용, 5개 E501 오류 수정"
-      files_changed:
-        - "src/nams/api/routers/process.py"
-      commits:
-        - "e06744f"
       pr: "#4"
+      merged: true
 
   - id: "TASK-003"
     title: "E2E 테스트 작성"
-    description: "Playwright E2E 테스트 6개 페이지 작성 + API 미실행 시에도 통과하도록 개선"
+    description: "Playwright E2E 테스트 6개 페이지 + API 미실행 대응"
     status: "completed"
     priority: "medium"
     category: "test"
@@ -63,38 +52,40 @@ tasks:
     agent: "test-engineer"
     result:
       success: true
-      message: "64/64 테스트 통과 (21개 실패 → 0개 실패)"
-      files_changed:
-        - "src/nams/ui/e2e/dashboard.spec.ts"
-        - "src/nams/ui/e2e/files.spec.ts"
-        - "src/nams/ui/e2e/groups.spec.ts"
-        - "src/nams/ui/e2e/patterns.spec.ts"
-        - "src/nams/ui/e2e/settings.spec.ts"
-        - "src/nams/ui/e2e/validator.spec.ts"
-        - "src/nams/ui/e2e/README.md"
-        - "src/nams/ui/src/App.tsx"
-      commits:
-        - "1e47b0c"
-      branch: "feat/e2e-test-improvements"
+      message: "64/64 테스트 통과"
+      pr: "#5"
+      merged: true
+      merge_commit: "6e03136"
 
-# 대기 중인 작업
-pending_tasks:
   - id: "TASK-004"
     title: "남은 Lint 오류 수정"
-    description: "기존 코드 98개 린트 오류 수정"
-    status: "pending"
+    description: "기존 코드 401개 린트 오류 수정 (ruff)"
+    status: "completed"
     priority: "low"
     category: "refactoring"
+    created_at: "2025-12-19T20:00:00"
+    completed_at: "2025-12-19T20:30:00"
+    agent: "code-reviewer"
+    result:
+      success: true
+      message: "401개 → 0개 린트 오류"
+      pr: "#6"
+      merged: true
+      merge_commit: "b85f6ca"
+
+# 대기 중인 작업
+pending_tasks: []
 
 # 완료된 작업 통계
 stats:
   total: 4
-  completed: 3
+  completed: 4
   failed: 0
-  pending: 1
+  pending: 0
+  prs_merged: 4
   by_category:
     feature: 1
-    refactoring: 1
+    refactoring: 2
     test: 1
     bugfix: 0
     docs: 0
