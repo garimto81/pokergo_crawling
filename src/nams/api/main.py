@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .database import init_database
-from .routers import patterns, settings, files, groups, stats, process, exclusions, categories
+from .routers import patterns, settings, files, groups, stats, process, exclusions, categories, validator
 
 # Initialize database on startup
 init_database()
@@ -35,6 +35,7 @@ app.include_router(groups.router, prefix="/api/groups", tags=["Groups"])
 app.include_router(process.router, prefix="/api/process", tags=["Processing"])
 app.include_router(exclusions.router, prefix="/api/exclusions", tags=["Exclusion Rules"])
 app.include_router(categories.router, tags=["Categories"])
+app.include_router(validator.router, tags=["Validator"])
 
 
 @app.get("/")

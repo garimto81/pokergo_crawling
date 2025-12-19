@@ -1,10 +1,19 @@
 """Scan NAS and create comprehensive file database."""
 import os
+import sys
 import json
 import re
+import argparse
 from pathlib import Path
 from datetime import datetime
 from collections import defaultdict
+
+# 스캔 대상 드라이브 설정
+SCAN_PATHS = {
+    "origin": Path("Y:/WSOP backup"),      # Origin (Y: 드라이브)
+    "archive": Path("Z:/"),                 # Archive (Z: 드라이브)
+    "pokergo": Path("X:/GGP Footage/POKERGO"),  # PokerGO Source (X: 드라이브)
+}
 
 NAS_ROOT = Path("Z:/")
 OUTPUT_DIR = Path("data/sources/nas")
@@ -65,7 +74,7 @@ def scan_directory(root_path, base_path=""):
             files.extend(scan_directory(entry.path, relative_path))
         elif entry.is_file():
             ext = os.path.splitext(entry.name)[1].lower()
-            if ext in ['.mp4', '.mkv', '.mov', '.avi', '.wmv', '.m4v']:
+            if ext in ['.mp4', '.mkv', '.mov', '.avi', '.wmv', '.m4v', '.mxf']:
                 filepath = Path(entry.path)
                 file_info = parse_filename(filepath)
                 file_info["relative_path"] = relative_path
@@ -90,20 +99,54 @@ def format_size(bytes_size):
     return f"{bytes_size:.1f} PB"
 
 def main():
+    parser = argparse.ArgumentParser(description='NAS 스캔 스크립트')
+    parser.add_argument('--folder', choices=['origin', 'archive', 'pokergo', 'all'],
+                        default='archive', help='스캔할 폴더 (default: archive)')
+    parser.add_argument('--mode', choices=['full', 'incremental'],
+                        default='full', help='스캔 모드')
+    args = parser.parse_args()
+
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    print(f"Scanning NAS at {NAS_ROOT}...")
+    # 스캔할 경로 결정
+    if args.folder == 'all':
+        scan_targets = list(SCAN_PATHS.items())
+    else:
+        scan_targets = [(args.folder, SCAN_PATHS[args.folder])]
 
     all_files = []
-    directories_to_scan = [
-        ("ARCHIVE", NAS_ROOT / "ARCHIVE"),
-        ("Clips", NAS_ROOT / "Clips"),
-    ]
 
-    for name, path in directories_to_scan:
-        if path.exists():
-            print(f"  Scanning {name}...")
-            files = scan_directory(path, name)
+    for folder_name, scan_root in scan_targets:
+        if not scan_root.exists():
+            print(f"[SKIP] {folder_name}: {scan_root} 경로가 존재하지 않습니다")
+            continue
+
+        print(f"\n{'='*60}")
+        print(f"Scanning {folder_name}: {scan_root}")
+        print(f"{'='*60}")
+
+        # 스캔 대상 결정
+        if scan_root == Path("Z:/"):
+            # Z: 드라이브는 기존 방식 (하위 디렉토리 스캔)
+            directories_to_scan = []
+            for item in scan_root.iterdir():
+                if item.is_dir() and not item.name.startswith('.'):
+                    directories_to_scan.append((item.name, item))
+
+            for name, path in directories_to_scan:
+                if path.exists():
+                    print(f"  Scanning {name}...")
+                    files = scan_directory(path, name)
+                    for f in files:
+                        f['source_folder'] = folder_name
+                    all_files.extend(files)
+                    print(f"    Found {len(files)} video files")
+        else:
+            # Y:, X: 드라이브는 직접 스캔
+            print(f"  Scanning {scan_root}...")
+            files = scan_directory(scan_root, folder_name)
+            for f in files:
+                f['source_folder'] = folder_name
             all_files.extend(files)
             print(f"    Found {len(files)} video files")
 

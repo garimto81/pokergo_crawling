@@ -299,3 +299,56 @@ class ExclusionRule(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+# =============================================================================
+# VALIDATOR MODELS (Phase 1: Catalog Validator)
+# =============================================================================
+
+class ScanHistory(Base):
+    """스캔 이력 - 일일 스캔 결과 기록."""
+    __tablename__ = 'scan_history'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    scan_type = Column(String(20), nullable=False)  # daily, manual, full
+    started_at = Column(DateTime, default=datetime.utcnow)
+    completed_at = Column(DateTime)
+    status = Column(String(20), default='running')  # running, completed, failed
+
+    # 스캔 결과 통계
+    new_files = Column(Integer, default=0)
+    updated_files = Column(Integer, default=0)
+    missing_files = Column(Integer, default=0)
+    path_changes = Column(Integer, default=0)
+
+    # 스캔 범위
+    scanned_drives = Column(String(50))  # "Y:,Z:,X:"
+    total_files_scanned = Column(Integer, default=0)
+    total_size_scanned = Column(BigInteger, default=0)
+
+    # 에러 정보
+    error_message = Column(Text)
+
+    __table_args__ = (
+        Index('idx_scan_history_started', 'started_at'),
+        Index('idx_scan_history_status', 'status'),
+    )
+
+
+class ValidationSession(Base):
+    """검증 세션 - 사용자 작업 단위."""
+    __tablename__ = 'validation_sessions'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_name = Column(String(100))
+    started_at = Column(DateTime, default=datetime.utcnow)
+    ended_at = Column(DateTime)
+
+    # 세션 통계
+    entries_reviewed = Column(Integer, default=0)
+    entries_verified = Column(Integer, default=0)
+    entries_modified = Column(Integer, default=0)
+
+    __table_args__ = (
+        Index('idx_validation_sessions_user', 'user_name'),
+    )

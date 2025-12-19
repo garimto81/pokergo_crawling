@@ -1,65 +1,41 @@
-# PokerGO Crawler
+# NAMS - NAS Asset Management System
 
-YouTube PokerGO 채널 메타데이터 크롤러.
-**다운로드는 4K Downloader 사용.**
+NAS 파일 패턴 매칭 및 PokerGO 콘텐츠 매칭 시스템.
+
+## 기능
+
+- NAS 파일 스캔 및 메타데이터 추출
+- 정규식 기반 패턴 매칭 (WSOP, Europe, APAC, Paradise 등)
+- PokerGO 에피소드 자동 매칭
+- Primary/Backup 그룹핑
+- Google Sheets/CSV/JSON 내보내기
 
 ## 설치
 
 ```bash
 pip install -e .
+cd src/nams/ui && npm install
 ```
 
-## 사용법
-
-### 1. YouTube 채널 크롤링
+## 실행
 
 ```bash
-# 전체 채널 크롤링
-pokergo crawl youtube
+# API 서버 (포트 8001)
+cd src/nams/api && uvicorn main:app --reload --port 8001
 
-# 최근 100개만
-pokergo crawl youtube -n 100
-
-# 전체 메타데이터 포함 (느림)
-pokergo crawl youtube --full
+# UI 서버 (포트 5174)
+cd src/nams/ui && npm run dev -- --port 5174
 ```
-
-### 2. 데이터 조회
-
-```bash
-# 영상 목록
-pokergo list videos
-
-# 통계
-pokergo stats
-
-# 검색
-pokergo search "WSOP"
-```
-
-### 3. URL 내보내기 (4K Downloader용)
-
-```bash
-# URL 목록 생성
-pokergo export-urls
-
-# 결과: data/youtube_urls.txt
-```
-
-### 4. 4K Downloader로 다운로드
-
-1. 4K Downloader 실행
-2. '링크 붙여넣기' 클릭
-3. `data/youtube_urls.txt` 파일 내용 붙여넣기
 
 ## 데이터베이스
 
-- 위치: `data/pokergo.db` (SQLite)
-- 테이블: channels, playlists, videos
+- 위치: `data/nams/nams.db` (SQLite)
+- 테이블: nas_files, patterns, file_groups, regions, event_types
 
 ## 기술 스택
 
 - Python 3.11+
-- yt-dlp (메타데이터 추출)
+- FastAPI
 - SQLAlchemy 2.0
-- Typer + Rich (CLI)
+- React 19 + Vite
+- TailwindCSS
