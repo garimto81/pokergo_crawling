@@ -6,11 +6,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 NAMS (NAS Asset Management System) - WSOP 영상 파일 통합 관리 및 PokerGO 메타데이터 매칭 시스템.
 
+**Version**: 2.0.0 | **Date**: 2025-12-19
+
 **핵심 기능:**
 - NAS 파일 스캔 및 메타데이터 추출 (Y:/Z:/X: 드라이브)
-- 정규식 기반 패턴 매칭 (WSOP, Europe, APAC, Paradise)
+- 정규식 기반 패턴 매칭 (33개 패턴)
+- Era별 카탈로그 생성 (CLASSIC/BOOM/HD)
 - PokerGO 에피소드 자동 매칭 (828개 비디오)
-- Google Sheets 5시트 내보내기
+- Netflix 스타일 제목 생성
+- Google Sheets 내보내기
 
 ## Quick Start
 
@@ -40,7 +44,7 @@ src/nams/
 ├── api/                           # FastAPI 백엔드
 │   ├── main.py                    # FastAPI 앱 엔트리포인트
 │   ├── database/
-│   │   ├── models.py              # SQLAlchemy 모델 (NasFile, Pattern, FileGroup)
+│   │   ├── models.py              # SQLAlchemy 모델 (NasFile, Pattern, FileGroup, CatalogEntry)
 │   │   ├── session.py             # DB 세션 관리
 │   │   └── init_db.py             # 초기 데이터 (패턴, 지역, 이벤트 타입)
 │   ├── routers/                   # API 엔드포인트
@@ -48,17 +52,24 @@ src/nams/
 │   │   ├── groups.py              # Asset Group 관리
 │   │   ├── patterns.py            # 패턴 관리
 │   │   ├── process.py             # 스캔/내보내기
-│   │   └── stats.py               # 통계
+│   │   ├── stats.py               # 통계
+│   │   ├── categories.py          # 카테고리 관리
+│   │   ├── exclusions.py          # 제외 규칙
+│   │   └── validator.py           # 매칭 검증
 │   └── services/                  # 비즈니스 로직
 │       ├── pattern_engine.py      # 핵심: 정규식 패턴 매칭 엔진
 │       ├── scanner.py             # NAS 스캔 서비스
 │       ├── grouping.py            # Asset Grouping (Primary/Backup)
 │       ├── matching.py            # PokerGO 매칭 서비스
+│       ├── matching_v2.py         # 개선된 매칭 (Era별)
+│       ├── category_matching.py   # 카테고리 기반 매칭
+│       ├── catalog_service.py     # 카탈로그 생성
+│       ├── title_generation.py    # Netflix 스타일 제목 생성
 │       └── export.py              # Google Sheets/CSV/JSON 내보내기
 │
 └── ui/                            # React 프론트엔드
     └── src/
-        ├── pages/                 # Dashboard, Files, Groups, Patterns
+        ├── pages/                 # Dashboard, Files, Groups, Patterns, Entries, Validator
         └── components/
 ```
 
@@ -87,8 +98,10 @@ NAS Drives (Y:/Z:/X:)
 | **NasFile** | NAS 파일 메타데이터 + 패턴 매칭 결과, `is_excluded` 플래그 |
 | **Pattern** | DB 기반 정규식 패턴 정의, 우선순위로 적용 |
 | **FileGroup** | 동일 콘텐츠 Asset Group (Primary/Backup 역할) |
+| **CatalogEntry** | Era별 카탈로그 엔트리 (Netflix 스타일 제목) |
 | **Region** | 지역 (LV, EU, APAC, PARADISE, CYPRUS, LONDON, LA) |
 | **EventType** | 이벤트 타입 (ME, BR, HR, GM, HU 등) |
+| **Era** | 시대 구분 (CLASSIC/BOOM/HD) |
 
 ## Commands
 
@@ -132,6 +145,12 @@ npm run test:e2e:ui  # UI 모드
 | `export_4sheets.py` | Google Sheets 5시트 내보내기 |
 | `match_pokergo_nas.py` | PokerGO-NAS 매칭 |
 | `test_pattern_engine.py` | 패턴 엔진 테스트 |
+| `create_master_catalog.py` | Era별 Master 카탈로그 생성 |
+| `run_title_generation.py` | Netflix 스타일 제목 생성 |
+| `match_classic.py` | CLASSIC Era (1973-2002) 매칭 |
+| `match_boom.py` | BOOM Era (2003-2010) 매칭 |
+| `match_hd.py` | HD Era (2011-2025) 매칭 |
+| `match_YYYY.py` | 연도별 개별 매칭 (2003-2025) |
 
 ## Data Storage
 
@@ -151,7 +170,7 @@ data/
 
 ## Pattern Matching Rules
 
-상세 규칙: [docs/MATCHING_RULES.md](docs/MATCHING_RULES.md) (v5.0)
+상세 규칙: [docs/MATCHING_RULES.md](docs/MATCHING_RULES.md) (v5.11)
 
 **패턴 추출률**: 97.6% (1,371/1,405 파일) - 파일명에서 메타데이터 추출 성공률
 **PokerGO 매칭률**: 53.3% (440/826 그룹) - Asset Group과 PokerGO 에피소드 매칭률
@@ -164,12 +183,17 @@ data/
 - `YYYY WSOP MEXX` → 2009 WSOP ME01 = 2009 Main Event Ep.1
 - `ESPN YYYY WSOP SHOW N` → ESPN 2007 WSOP SHOW 1
 
-**Era 분류:**
-- CLASSIC (1973-2002): 연도만으로 Main Event 자동 매칭
-- BOOM (2003-2010): 포커 붐 시대
-- HD (2011-2025): PokerGO 스트리밍
+**Era 분류 (카탈로그 생성):**
+
+| Era | 연도 | 특징 | 카탈로그 |
+|-----|------|------|----------|
+| CLASSIC | 1973-2002 | Main Event Only | 연도별 1개 |
+| BOOM | 2003-2010 | 포커 붐, ESPN | 다양한 이벤트 |
+| HD | 2011-2025 | PokerGO 스트리밍 | 상세 매칭 |
 
 **제외 조건:** Size < 1GB, Duration < 30min, `clip`, `hand_`, `circuit` 포함
+
+**GOG 버전 우선순위:** 찐최종 > 수정본2 > 수정본 > 원본 (PRIMARY는 1개만)
 
 ## Matching Categories (4분류)
 
@@ -215,13 +239,16 @@ docs/
 ├── [PRD]
 │   ├── PRD-NAMS-MATCHING.md       # 매칭 시스템 PRD (v2.0)
 │   ├── PRD-POKERGO-SOURCE.md      # X: 드라이브 통합 PRD
+│   ├── PRD-CATALOG-DB.md          # 카탈로그 DB PRD
 │   └── PRD-NAMS-REFACTORING.md    # 기술 부채 로드맵
 ├── [Operations]
 │   ├── AUTOMATION_PIPELINE.md     # 파이프라인 실행 가이드
 │   └── DASHBOARD_GUIDE.md         # UI 사용 가이드
 ├── [Technical Reference]
-│   ├── MATCHING_RULES.md          # 매칭 규칙 핵심 (v5.0)
-│   ├── MATCHING_PATTERNS_DETAIL.md # 패턴 상세/변경이력 (v5.0)
+│   ├── MATCHING_RULES.md          # 매칭 규칙 핵심 (v5.11)
+│   ├── MATCHING_PATTERNS_DETAIL.md # 패턴 상세/변경이력
+│   ├── MATCHING_STRATEGY_2024.md  # 2024 매칭 전략
+│   ├── MATCHING_STRATEGY_2025.md  # 2025 매칭 전략
 │   └── NAS_DRIVE_STRUCTURE.md     # 드라이브 물리 구조
 └── [Archive]
     └── (레거시 문서)
@@ -231,8 +258,11 @@ docs/
 
 | 문서 | 내용 |
 |------|------|
-| `docs/MATCHING_RULES.md` | 매칭 규칙 핵심 (v5.0) |
-| `docs/MATCHING_PATTERNS_DETAIL.md` | 패턴 상세 예시, 변경 이력 (v5.0) |
+| `docs/MATCHING_RULES.md` | 매칭 규칙 핵심 (v5.11) |
+| `docs/MATCHING_PATTERNS_DETAIL.md` | 패턴 상세 예시, 변경 이력 |
+| `docs/MATCHING_STRATEGY_2024.md` | 2024년 매칭 전략 |
+| `docs/MATCHING_STRATEGY_2025.md` | 2025년 매칭 전략 |
+| `docs/PRD-CATALOG-DB.md` | 카탈로그 DB PRD |
 | `docs/AUTOMATION_PIPELINE.md` | 파이프라인 실행, 트러블슈팅 |
 | `docs/SYSTEM_OVERVIEW.md` | 시스템 아키텍처 (v2.1) |
 | `docs/NAS_DRIVE_STRUCTURE.md` | X:/Y:/Z: 드라이브 폴더 구조 |
