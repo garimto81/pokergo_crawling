@@ -25,7 +25,7 @@ async def list_exclusion_rules(
     """Get all exclusion rules."""
     query = db.query(ExclusionRule)
     if active_only:
-        query = query.filter(ExclusionRule.is_active == True)
+        query = query.filter(ExclusionRule.is_active)
     if rule_type:
         query = query.filter(ExclusionRule.rule_type == rule_type)
 
@@ -90,7 +90,8 @@ async def delete_exclusion_rule(rule_id: int, db: Session = Depends(get_db)):
 
     db.delete(rule)
     db.commit()
-    return MessageResponse(message=f"Exclusion rule deleted: {rule.rule_type} {rule.operator} {rule.value}")
+    msg = f"Exclusion rule deleted: {rule.rule_type} {rule.operator} {rule.value}"
+    return MessageResponse(message=msg)
 
 
 @router.put("/{rule_id}/toggle", response_model=ExclusionRuleResponse)

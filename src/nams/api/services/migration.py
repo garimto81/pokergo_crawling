@@ -16,7 +16,7 @@ POKERGO_EPISODES_JSON = DATA_DIR / "pokergo/episodes.json"
 
 def load_json(path: Path) -> dict:
     """Load JSON file."""
-    with open(path, 'r', encoding='utf-8') as f:
+    with open(path, encoding='utf-8') as f:
         return json.load(f)
 
 
@@ -60,7 +60,7 @@ def migrate_pokergo_episodes(db: Session) -> int:
         if ep.get('aired_at'):
             try:
                 aired_at = datetime.fromisoformat(ep['aired_at'].replace('Z', '+00:00'))
-            except:
+            except (ValueError, AttributeError):
                 pass
 
         episode = PokergoEpisode(

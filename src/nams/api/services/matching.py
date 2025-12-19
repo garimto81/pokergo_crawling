@@ -1,7 +1,6 @@
 """PokerGO matching service for NAMS."""
 import re
 from difflib import SequenceMatcher
-from typing import Optional
 
 from sqlalchemy.orm import Session
 
@@ -64,9 +63,9 @@ CLASSIC_ERA_END_YEAR = 2002
 
 def generate_catalog_title(
     group: 'AssetGroup',
-    pokergo_title: Optional[str] = None,
-    region_code: Optional[str] = None,
-    event_type_code: Optional[str] = None,
+    pokergo_title: str | None = None,
+    region_code: str | None = None,
+    event_type_code: str | None = None,
 ) -> str:
     """Generate a catalog title for display.
 
@@ -184,7 +183,7 @@ def update_catalog_titles(db: Session) -> dict:
     return stats
 
 
-def extract_year_from_title(title: str) -> Optional[int]:
+def extract_year_from_title(title: str) -> int | None:
     """Extract year from title."""
     # Look for 4-digit year
     match = re.search(r'\b(19|20)\d{2}\b', title)
@@ -193,7 +192,7 @@ def extract_year_from_title(title: str) -> Optional[int]:
     return None
 
 
-def extract_episode_from_title(title: str) -> Optional[int]:
+def extract_episode_from_title(title: str) -> int | None:
     """Extract episode number from title."""
     # Look for Episode N, Ep N, #N patterns
     patterns = [
@@ -214,7 +213,7 @@ def calculate_similarity(s1: str, s2: str) -> float:
     return SequenceMatcher(None, normalize_title(s1), normalize_title(s2)).ratio()
 
 
-def extract_year_from_season(season_title: str) -> Optional[int]:
+def extract_year_from_season(season_title: str) -> int | None:
     """Extract year from season_title field (most reliable source)."""
     if not season_title:
         return None
@@ -228,7 +227,7 @@ def match_classic_era(
     db: Session,
     group: AssetGroup,
     episodes: list[PokergoEpisode]
-) -> tuple[Optional[PokergoEpisode], float]:
+) -> tuple[PokergoEpisode | None, float]:
     """Match CLASSIC Era (1973-2002) files by year only.
 
     In CLASSIC Era, there's only 1 Main Event video per year.
@@ -285,7 +284,7 @@ def match_group_to_pokergo(
     db: Session,
     group: AssetGroup,
     episodes: list[PokergoEpisode]
-) -> tuple[Optional[PokergoEpisode], float]:
+) -> tuple[PokergoEpisode | None, float]:
     """Find best matching PokerGO episode for a group.
 
     Returns:
@@ -307,9 +306,7 @@ def match_group_to_pokergo(
     region = db.query(Region).get(group.region_id) if group.region_id else None
     event_type = db.query(EventType).get(group.event_type_id) if group.event_type_id else None
 
-    region_name = region.name if region else ""
     region_code = region.code if region else ""
-    event_type_name = event_type.name if event_type else ""
     event_type_code = event_type.code if event_type else ""
 
     # Build expected title patterns
@@ -337,7 +334,7 @@ def match_group_to_pokergo(
 
         score = 0.0
         title_lower = episode.title.lower()
-        title_normalized = normalize_title(episode.title)
+        normalize_title(episode.title)
 
         # Year match (important) - Use season_title first (most reliable)
         ep_year = extract_year_from_season(episode.season_title)
@@ -401,7 +398,8 @@ def match_group_to_pokergo(
 
         if event_type_code:
             # CRITICAL: Prevent wrong event type matches
-            # GM/HU/HR/BR groups should NEVER match Main Event titles (unless title also has their type)
+            # GM/HU/HR/BR groups should NEVER match Main Event titles
+            # (unless title also has their type)
             if event_type_code == 'GM':
                 if is_grudge_match_title:
                     score += 0.3
@@ -432,7 +430,8 @@ def match_group_to_pokergo(
             # No event_type - be very strict about what this can match
             # Groups without event_type should only match Main Event coverage
             # to prevent random bracelet event matches (BOOM era issue)
-            is_bracelet_event = re.search(r'wsop\s+\d{4}\s+\d{2}\s+', title_lower, re.I)  # "Wsop 2004 05 1500 Nlh"
+            # Pattern: "Wsop 2004 05 1500 Nlh"
+            is_bracelet_event = re.search(r'wsop\s+\d{4}\s+\d{2}\s+', title_lower, re.I)
             if is_bracelet_event and not is_main_event_title:
                 # This looks like a bracelet event by number, but group has no event_type
                 # Skip to prevent wrong matches
@@ -524,7 +523,7 @@ def run_pokergo_matching(db: Session, min_score: float = 0.5) -> dict:
 
     # Get groups without PokerGO match
     groups = db.query(AssetGroup).filter(
-        AssetGroup.pokergo_episode_id == None
+        AssetGroup.pokergo_episode_id is None
     ).all()
 
     stats['processed'] = len(groups)
@@ -542,7 +541,11 @@ def run_pokergo_matching(db: Session, min_score: float = 0.5) -> dict:
             continue
 
         # Skip groups already categorized as NAS_ONLY (no PokerGO data exists)
-        if group.match_category in (MATCH_CATEGORY_NAS_ONLY_HISTORIC, MATCH_CATEGORY_NAS_ONLY_MODERN):
+        nas_only_categories = (
+            MATCH_CATEGORY_NAS_ONLY_HISTORIC,
+            MATCH_CATEGORY_NAS_ONLY_MODERN,
+        )
+        if group.match_category in nas_only_categories:
             stats['skipped'] += 1
             continue
 
@@ -590,7 +593,7 @@ def enforce_one_to_one(db: Session) -> dict:
     episode_to_groups = defaultdict(list)
 
     groups_with_match = db.query(AssetGroup).filter(
-        AssetGroup.pokergo_episode_id != None
+        AssetGroup.pokergo_episode_id is not None
     ).all()
 
     for group in groups_with_match:
@@ -690,7 +693,7 @@ def get_pokergo_only_episodes(db: Session) -> list[dict]:
     # Get all matched episode IDs
     matched_ids = set()
     groups_with_match = db.query(AssetGroup).filter(
-        AssetGroup.pokergo_episode_id != None
+        AssetGroup.pokergo_episode_id is not None
     ).all()
     for g in groups_with_match:
         matched_ids.add(g.pokergo_episode_id)

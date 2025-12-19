@@ -2,7 +2,6 @@
 import json
 import os
 from datetime import datetime
-from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -29,17 +28,17 @@ class ValidatorEntryResponse(BaseModel):
     """검증 항목 응답."""
     id: int
     entry_code: str
-    display_title: Optional[str]
-    pokergo_title: Optional[str]
+    display_title: str | None
+    pokergo_title: str | None
     year: int
-    event_type: Optional[str]
-    category_id: Optional[int]
-    category_name: Optional[str]
-    match_type: Optional[str]
-    match_score: Optional[float]
+    event_type: str | None
+    category_id: int | None
+    category_name: str | None
+    match_type: str | None
+    match_score: float | None
     verified: bool
-    verified_at: Optional[datetime]
-    verified_by: Optional[str]
+    verified_at: datetime | None
+    verified_by: str | None
     file_count: int
     total_size_gb: float
 
@@ -54,28 +53,28 @@ class EntryFileResponse(BaseModel):
     full_path: str
     size_bytes: int
     size_gb: float
-    drive: Optional[str]
-    role: Optional[str]
+    drive: str | None
+    role: str | None
     extension: str
 
 
 class ValidatorEntryDetailResponse(BaseModel):
     """검증 항목 상세 (파일 목록 포함)."""
     entry: ValidatorEntryResponse
-    files: List[EntryFileResponse]
-    changes: List[dict]
+    files: list[EntryFileResponse]
+    changes: list[dict]
 
 
 class ValidatorUpdateRequest(BaseModel):
     """제목/카테고리 수정 요청."""
-    display_title: Optional[str] = None
-    category_id: Optional[int] = None
+    display_title: str | None = None
+    category_id: int | None = None
 
 
 class VerifyRequest(BaseModel):
     """검증 완료 요청."""
     verified_by: str = "admin"
-    notes: Optional[str] = None
+    notes: str | None = None
 
 
 class PlayRequest(BaseModel):
@@ -95,7 +94,7 @@ class ValidatorStatsResponse(BaseModel):
 
 class PaginatedResponse(BaseModel):
     """페이지네이션 응답."""
-    items: List[ValidatorEntryResponse]
+    items: list[ValidatorEntryResponse]
     total: int
     page: int
     page_size: int
@@ -110,13 +109,13 @@ class PaginatedResponse(BaseModel):
 def get_pending_entries(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    year: Optional[int] = None,
-    category_id: Optional[int] = None,
-    search: Optional[str] = None,
+    year: int | None = None,
+    category_id: int | None = None,
+    search: str | None = None,
     db: Session = Depends(get_db),
 ):
     """미검증 항목 목록 조회."""
-    query = db.query(CategoryEntry).filter(CategoryEntry.verified == False)
+    query = db.query(CategoryEntry).filter(not CategoryEntry.verified)
 
     # Filters
     if year:
@@ -397,7 +396,7 @@ def play_video(
 def get_stats(db: Session = Depends(get_db)):
     """검증 진행 통계."""
     total = db.query(CategoryEntry).count()
-    verified = db.query(CategoryEntry).filter(CategoryEntry.verified == True).count()
+    verified = db.query(CategoryEntry).filter(CategoryEntry.verified).count()
     pending = total - verified
 
     # By year
@@ -493,4 +492,4 @@ def get_scheduler_history(
 
 
 # Import for Integer cast
-from sqlalchemy import Integer
+from sqlalchemy import Integer  # noqa: E402

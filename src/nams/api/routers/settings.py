@@ -27,7 +27,7 @@ async def list_regions(
     """Get all regions."""
     query = db.query(Region)
     if active_only:
-        query = query.filter(Region.is_active == True)
+        query = query.filter(Region.is_active)
     return query.all()
 
 
@@ -97,10 +97,11 @@ async def delete_region(region_id: int, db: Session = Depends(get_db)):
     ).scalar()
 
     if file_count > 0 or group_count > 0:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Region is used by {file_count} files and {group_count} groups. Deactivate instead."
+        detail = (
+            f"Region is used by {file_count} files and {group_count} groups. "
+            "Deactivate instead."
         )
+        raise HTTPException(status_code=400, detail=detail)
 
     db.delete(region)
     db.commit()
@@ -117,7 +118,7 @@ async def list_event_types(
     """Get all event types."""
     query = db.query(EventType)
     if active_only:
-        query = query.filter(EventType.is_active == True)
+        query = query.filter(EventType.is_active)
     return query.all()
 
 
@@ -187,10 +188,11 @@ async def delete_event_type(type_id: int, db: Session = Depends(get_db)):
     ).scalar()
 
     if file_count > 0 or group_count > 0:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Event type is used by {file_count} files and {group_count} groups. Deactivate instead."
+        detail = (
+            f"Event type is used by {file_count} files and {group_count} groups. "
+            "Deactivate instead."
         )
+        raise HTTPException(status_code=400, detail=detail)
 
     db.delete(event_type)
     db.commit()

@@ -1,6 +1,5 @@
 """Processing API router for NAMS (migration, scan, export, extract, group, match)."""
 from enum import Enum
-from typing import Optional
 
 from fastapi import APIRouter
 from fastapi.responses import PlainTextResponse
@@ -155,16 +154,16 @@ class ExportFormat(str, Enum):
 class ExportRequest(BaseModel):
     """Export request parameters."""
     format: ExportFormat = ExportFormat.CSV
-    sheet_name: Optional[str] = "NAMS Export"
+    sheet_name: str | None = "NAMS Export"
 
 
 class ExportResponse(BaseModel):
     """Export response."""
     success: bool
     message: str
-    file_path: Optional[str] = None
-    url: Optional[str] = None
-    details: Optional[dict] = None
+    file_path: str | None = None
+    url: str | None = None
+    details: dict | None = None
 
 
 @router.post("/export", response_model=ExportResponse)

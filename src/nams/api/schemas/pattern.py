@@ -1,6 +1,5 @@
 """Pattern Pydantic schemas for NAMS API."""
 from datetime import datetime
-from typing import Optional
 
 from pydantic import BaseModel
 
@@ -11,10 +10,10 @@ class PatternBase(BaseModel):
     priority: int
     regex: str
     extract_year: bool = True
-    extract_region: Optional[str] = None
-    extract_type: Optional[str] = None
+    extract_region: str | None = None
+    extract_type: str | None = None
     extract_episode: bool = True
-    description: Optional[str] = None
+    description: str | None = None
     is_active: bool = True
 
 
@@ -25,15 +24,15 @@ class PatternCreate(PatternBase):
 
 class PatternUpdate(BaseModel):
     """Pattern update schema."""
-    name: Optional[str] = None
-    priority: Optional[int] = None
-    regex: Optional[str] = None
-    extract_year: Optional[bool] = None
-    extract_region: Optional[str] = None
-    extract_type: Optional[str] = None
-    extract_episode: Optional[bool] = None
-    description: Optional[str] = None
-    is_active: Optional[bool] = None
+    name: str | None = None
+    priority: int | None = None
+    regex: str | None = None
+    extract_year: bool | None = None
+    extract_region: str | None = None
+    extract_type: str | None = None
+    extract_episode: bool | None = None
+    description: str | None = None
+    is_active: bool | None = None
 
 
 class PatternResponse(PatternBase):
@@ -59,11 +58,11 @@ class PatternTestRequest(BaseModel):
 class PatternTestResult(BaseModel):
     """Pattern test result."""
     matched: bool
-    pattern_name: Optional[str] = None
-    extracted_year: Optional[str] = None
-    extracted_region: Optional[str] = None
-    extracted_type: Optional[str] = None
-    extracted_episode: Optional[int] = None
+    pattern_name: str | None = None
+    extracted_year: str | None = None
+    extracted_region: str | None = None
+    extracted_type: str | None = None
+    extracted_episode: int | None = None
     confidence: float = 0.0
 
 

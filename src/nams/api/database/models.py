@@ -81,7 +81,11 @@ class CategoryEntry(Base):
 
     # Relationships
     category = relationship("Category", back_populates="entries")
-    files = relationship("NasFile", back_populates="category_entry", foreign_keys="NasFile.entry_id")
+    files = relationship(
+        "NasFile",
+        back_populates="category_entry",
+        foreign_keys="NasFile.entry_id",
+    )
 
     __table_args__ = (
         Index('idx_category_entries_category', 'category_id'),

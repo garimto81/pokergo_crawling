@@ -1,5 +1,4 @@
 """Group management API router for NAMS."""
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func
@@ -36,14 +35,14 @@ def format_size(bytes_size: int) -> str:
 async def list_groups(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
-    year: Optional[int] = None,
-    region_id: Optional[int] = None,
-    event_type_id: Optional[int] = None,
-    has_pokergo_match: Optional[bool] = None,
-    match_category: Optional[str] = None,
-    has_backup: Optional[bool] = None,
-    min_file_count: Optional[int] = None,
-    search: Optional[str] = None,
+    year: int | None = None,
+    region_id: int | None = None,
+    event_type_id: int | None = None,
+    has_pokergo_match: bool | None = None,
+    match_category: str | None = None,
+    has_backup: bool | None = None,
+    min_file_count: int | None = None,
+    search: str | None = None,
     db: Session = Depends(get_db)
 ):
     """Get paginated group list with filters."""
@@ -78,7 +77,12 @@ async def list_groups(
 
     # Paginate
     offset = (page - 1) * page_size
-    groups = query.order_by(AssetGroup.year.desc(), AssetGroup.group_id).offset(offset).limit(page_size).all()
+    groups = (
+        query.order_by(AssetGroup.year.desc(), AssetGroup.group_id)
+        .offset(offset)
+        .limit(page_size)
+        .all()
+    )
 
     # Transform to response
     items = []

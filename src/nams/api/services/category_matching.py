@@ -7,7 +7,6 @@ Phase 2: 하이브리드 매칭 엔진
 """
 import re
 from dataclasses import dataclass
-from typing import Optional
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -39,10 +38,10 @@ CLASSIC_ERA_END = 2002
 class MatchKey:
     """매칭 키 - 연도, 이벤트, 에피소드 기반."""
     year: int
-    region: Optional[str] = None  # LV, EU, APAC, PARADISE, CYPRUS
-    event_type: Optional[str] = None  # ME, BR, HU, GM, HR
-    episode: Optional[int] = None  # Episode/Day/Part number
-    event_num: Optional[int] = None  # Bracelet Event #N
+    region: str | None = None  # LV, EU, APAC, PARADISE, CYPRUS
+    event_type: str | None = None  # ME, BR, HU, GM, HR
+    episode: int | None = None  # Episode/Day/Part number
+    event_num: int | None = None  # Bracelet Event #N
 
 
 @dataclass
@@ -50,8 +49,8 @@ class MatchResult:
     """매칭 결과."""
     match_type: str
     score: float
-    pokergo_ep_id: Optional[str] = None
-    pokergo_title: Optional[str] = None
+    pokergo_ep_id: str | None = None
+    pokergo_title: str | None = None
     reason: str = ""
 
 
@@ -59,7 +58,7 @@ class MatchResult:
 # PokerGO Key Extraction
 # =============================================================================
 
-def extract_year_from_text(text: str) -> Optional[int]:
+def extract_year_from_text(text: str) -> int | None:
     """텍스트에서 연도 추출."""
     if not text:
         return None
@@ -67,7 +66,7 @@ def extract_year_from_text(text: str) -> Optional[int]:
     return int(match.group()) if match else None
 
 
-def extract_episode_from_text(text: str) -> Optional[int]:
+def extract_episode_from_text(text: str) -> int | None:
     """텍스트에서 에피소드 번호 추출."""
     if not text:
         return None
@@ -84,7 +83,7 @@ def extract_episode_from_text(text: str) -> Optional[int]:
     return None
 
 
-def extract_event_num_from_text(text: str) -> Optional[int]:
+def extract_event_num_from_text(text: str) -> int | None:
     """텍스트에서 이벤트 번호 추출 (Bracelet Event #N)."""
     if not text:
         return None
@@ -92,7 +91,7 @@ def extract_event_num_from_text(text: str) -> Optional[int]:
     return int(match.group(1)) if match else None
 
 
-def extract_pokergo_key(episode: PokergoEpisode) -> Optional[MatchKey]:
+def extract_pokergo_key(episode: PokergoEpisode) -> MatchKey | None:
     """PokerGO 에피소드에서 매칭 키 추출."""
     title = episode.title or ""
     season = episode.season_title or ""
@@ -150,7 +149,7 @@ def extract_pokergo_key(episode: PokergoEpisode) -> Optional[MatchKey]:
 # CategoryEntry Key Extraction
 # =============================================================================
 
-def extract_event_num_from_entry_code(entry_code: str) -> Optional[int]:
+def extract_event_num_from_entry_code(entry_code: str) -> int | None:
     """entry_code에서 Bracelet Event 번호 추출.
 
     예: WSOP_2025_BR_E09 -> 9
@@ -307,14 +306,20 @@ def find_best_match(
         if entry_key.event_num is not None and pg_key.event_num is not None:
             if entry_key.event_num == pg_key.event_num:
                 exact_match = ep
-                exact_reason = f"Year={entry_key.year} | Type={entry_key.event_type} | Event#{entry_key.event_num}"
+                exact_reason = (
+                    f"Year={entry_key.year} | Type={entry_key.event_type} | "
+                    f"Event#{entry_key.event_num}"
+                )
                 break
 
         # Episode 번호로 매칭
         if entry_key.episode is not None and pg_key.episode is not None:
             if entry_key.episode == pg_key.episode:
                 exact_match = ep
-                exact_reason = f"Year={entry_key.year} | Type={entry_key.event_type} | Episode={entry_key.episode}"
+                exact_reason = (
+                    f"Year={entry_key.year} | Type={entry_key.event_type} | "
+                    f"Episode={entry_key.episode}"
+                )
                 break
 
     # 번호로 정확히 매칭되면 EXACT
@@ -347,7 +352,10 @@ def find_best_match(
                     score=0.85,
                     pokergo_ep_id=ep.id,
                     pokergo_title=ep.title,
-                    reason=f"Year={entry_key.year} | Type={entry_key.event_type} | Single candidate",
+                    reason=(
+                        f"Year={entry_key.year} | Type={entry_key.event_type} | "
+                        "Single candidate"
+                    ),
                 )
 
     # 4단계: 여러 후보가 있는데 번호로 구분 불가 → NONE (보수적 처리)
@@ -514,7 +522,7 @@ def get_matching_summary(db: Session) -> dict:
     # Verification needed (PARTIAL)
     summary['verification_needed'] = db.query(CategoryEntry).filter(
         CategoryEntry.match_type == MATCH_TYPE_PARTIAL,
-        CategoryEntry.verified == False,
+        not CategoryEntry.verified,
     ).count()
 
     return summary
@@ -536,7 +544,9 @@ def run_full_matching_pipeline(clear_existing: bool = False) -> dict:
         results = {}
 
         # 1. Category 매칭
-        results['matching'] = run_category_matching(db, min_score=0.5, clear_existing=clear_existing)
+        results['matching'] = run_category_matching(
+            db, min_score=0.5, clear_existing=clear_existing
+        )
 
         # 2. Display title 업데이트
         results['titles'] = update_display_titles(db)

@@ -28,7 +28,7 @@ async def list_patterns(
     """Get all patterns ordered by priority."""
     query = db.query(Pattern)
     if active_only:
-        query = query.filter(Pattern.is_active == True)
+        query = query.filter(Pattern.is_active)
     return query.order_by(Pattern.priority).all()
 
 

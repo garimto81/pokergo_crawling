@@ -214,9 +214,15 @@ async def get_sync_status(db: Session = Depends(get_db)):
             else:
                 group_folders[f.asset_group_id]["origin"] += 1
 
-    shared_groups = sum(1 for g in group_folders.values() if g["origin"] > 0 and g["archive"] > 0)
-    origin_only_groups = sum(1 for g in group_folders.values() if g["origin"] > 0 and g["archive"] == 0)
-    archive_only_groups = sum(1 for g in group_folders.values() if g["origin"] == 0 and g["archive"] > 0)
+    shared_groups = sum(
+        1 for g in group_folders.values() if g["origin"] > 0 and g["archive"] > 0
+    )
+    origin_only_groups = sum(
+        1 for g in group_folders.values() if g["origin"] > 0 and g["archive"] == 0
+    )
+    archive_only_groups = sum(
+        1 for g in group_folders.values() if g["origin"] == 0 and g["archive"] > 0
+    )
 
     return {
         "origin_files": origin_count,

@@ -1,6 +1,5 @@
 """Category and CategoryEntry API endpoints."""
 from datetime import datetime
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func
@@ -39,9 +38,9 @@ router = APIRouter(prefix="/api", tags=["categories"])
 def get_categories(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
-    year: Optional[int] = None,
-    region: Optional[str] = None,
-    source: Optional[str] = None,
+    year: int | None = None,
+    region: str | None = None,
+    source: str | None = None,
     db: Session = Depends(get_db),
 ):
     """카테고리 목록 조회."""
@@ -157,12 +156,12 @@ def get_category_entries(
 def get_entries(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
-    match_type: Optional[str] = None,
-    source: Optional[str] = None,
-    verified: Optional[bool] = None,
-    year: Optional[int] = None,
-    event_type: Optional[str] = None,
-    search: Optional[str] = None,
+    match_type: str | None = None,
+    source: str | None = None,
+    verified: bool | None = None,
+    year: int | None = None,
+    event_type: str | None = None,
+    search: str | None = None,
     db: Session = Depends(get_db),
 ):
     """Entry 목록 조회."""
@@ -325,7 +324,7 @@ def get_kpi_stats(db: Session = Depends(get_db)):
     """KPI 통계 조회."""
     total_entries = db.query(CategoryEntry).count()
     total_files = db.query(NasFile).count()
-    active_files = db.query(NasFile).filter(NasFile.is_excluded == False).count()
+    active_files = db.query(NasFile).filter(not NasFile.is_excluded).count()
 
     # Files with entry_id
     files_with_entry = db.query(NasFile).filter(
@@ -347,7 +346,7 @@ def get_kpi_stats(db: Session = Depends(get_db)):
 
     # Verified count
     verified_count = db.query(CategoryEntry).filter(
-        CategoryEntry.verified == True
+        CategoryEntry.verified
     ).count()
 
     # Match type distribution
@@ -359,7 +358,7 @@ def get_kpi_stats(db: Session = Depends(get_db)):
     # Verification needed (PARTIAL & not verified)
     verification_needed = db.query(CategoryEntry).filter(
         CategoryEntry.match_type == 'PARTIAL',
-        CategoryEntry.verified == False,
+        not CategoryEntry.verified,
     ).count()
 
     # Calculate KPIs
@@ -396,25 +395,25 @@ def get_kpi_stats(db: Session = Depends(get_db)):
 
 @router.get("/content-tree")
 def get_content_tree(
-    year: Optional[int] = None,
+    year: int | None = None,
     db: Session = Depends(get_db),
 ):
     """Content Explorer 트리 데이터 조회.
-    
+
     Year → Category → EventType → Entry 계층 구조.
     """
     from collections import defaultdict
-    
+
     # Get all entries with category info
     query = db.query(CategoryEntry).join(Category)
     if year:
         query = query.filter(CategoryEntry.year == year)
-    
+
     entries = query.order_by(
         CategoryEntry.year.desc(),
         CategoryEntry.entry_code
     ).all()
-    
+
     # Build hierarchical structure
     year_map = defaultdict(lambda: {
         'entry_count': 0,
@@ -439,7 +438,7 @@ def get_content_tree(
             })
         })
     })
-    
+
     # Event type names mapping
     event_type_names = {
         'ME': 'Main Event',
@@ -451,13 +450,13 @@ def get_content_tree(
         'APAC': 'Asia Pacific',
         'PAD': 'Paradise',
     }
-    
+
     # Process entries
     for entry in entries:
         y = entry.year
         cat = entry.category
         et = entry.event_type or 'OTHER'
-        
+
         # Year level
         year_map[y]['entry_count'] += 1
         year_map[y]['total_size'] += entry.total_size_bytes or 0
@@ -483,15 +482,16 @@ def get_content_tree(
                 year_map[y]['categories'][cat_key]['pokergo_only_count'] += 1
 
             # Event type level
-            year_map[y]['categories'][cat_key]['event_types'][et]['name'] = event_type_names.get(et, et)
-            year_map[y]['categories'][cat_key]['event_types'][et]['entry_count'] += 1
+            event_type_map = year_map[y]['categories'][cat_key]['event_types'][et]
+            event_type_map['name'] = event_type_names.get(et, et)
+            event_type_map['entry_count'] += 1
             if entry.match_type == 'EXACT':
                 year_map[y]['categories'][cat_key]['event_types'][et]['exact_count'] += 1
             elif entry.match_type == 'NONE':
                 year_map[y]['categories'][cat_key]['event_types'][et]['none_count'] += 1
             elif entry.match_type == 'POKERGO_ONLY':
                 year_map[y]['categories'][cat_key]['event_types'][et]['pokergo_only_count'] += 1
-            
+
             # Entry level
             year_map[y]['categories'][cat_key]['event_types'][et]['entries'].append({
                 'id': entry.id,
@@ -503,7 +503,7 @@ def get_content_tree(
                 'file_count': entry.file_count or 0,
                 'total_size_gb': round((entry.total_size_bytes or 0) / (1024**3), 2),
             })
-    
+
     # Convert to response format
     years = []
     for y in sorted(year_map.keys(), reverse=True):
@@ -541,7 +541,7 @@ def get_content_tree(
             'total_size_gb': round(y_data['total_size'] / (1024**3), 2),
             'categories': sorted(categories, key=lambda x: -x['entry_count']),
         })
-    
+
     # Summary
     total_entries = sum(y['entry_count'] for y in years)
     total_exact = sum(y['exact_count'] for y in years)

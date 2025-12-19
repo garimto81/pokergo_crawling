@@ -8,7 +8,7 @@
 - 컬렉션/시즌 헤더 제외
 """
 import re
-from typing import NamedTuple, Optional
+from typing import NamedTuple
 
 from sqlalchemy.orm import Session
 
@@ -69,12 +69,12 @@ class PokergoMatchKey(NamedTuple):
     """PokerGO 매칭 키."""
     year: int
     event_type: str  # ME, BR, GM, HU, EU, APAC, etc.
-    episode: Optional[int]  # Episode number or Event number
-    day: Optional[str]  # Day 1A, 1B, etc.
-    region: Optional[str]  # EU, APAC, PARADISE
+    episode: int | None  # Episode number or Event number
+    day: str | None  # Day 1A, 1B, etc.
+    region: str | None  # EU, APAC, PARADISE
 
 
-def extract_pokergo_match_key(episode: PokergoEpisode) -> Optional[PokergoMatchKey]:
+def extract_pokergo_match_key(episode: PokergoEpisode) -> PokergoMatchKey | None:
     """PokerGO 에피소드에서 매칭 키 추출.
 
     Title 패턴:
@@ -196,7 +196,9 @@ def extract_pokergo_match_key(episode: PokergoEpisode) -> Optional[PokergoMatchK
     )
 
 
-def extract_nas_match_key(group: AssetGroup, event_types: dict, regions: dict) -> Optional[PokergoMatchKey]:
+def extract_nas_match_key(
+    group: AssetGroup, event_types: dict, regions: dict
+) -> PokergoMatchKey | None:
     """NAS 그룹에서 매칭 키 추출."""
     if not group.year:
         return None
@@ -273,7 +275,10 @@ def match_keys(nas_key: PokergoMatchKey, pokergo_key: PokergoMatchKey) -> tuple[
             return True, score, " | ".join(reasons)
         else:
             # Episode mismatch but type matches
-            return False, score * 0.5, f"Episode mismatch: NAS={nas_key.episode}, PG={pokergo_key.episode}"
+            mismatch_msg = (
+                f"Episode mismatch: NAS={nas_key.episode}, PG={pokergo_key.episode}"
+            )
+            return False, score * 0.5, mismatch_msg
 
     # Day match (for Main Event without episode)
     if nas_key.event_type == 'ME' and not nas_key.episode and pokergo_key.day:
@@ -370,7 +375,6 @@ def run_matching_v2(db: Session, min_score: float = 0.5, clear_existing: bool = 
 
         best_match = None
         best_score = 0.0
-        best_reason = ""
 
         # Try exact match first
         if nas_key.episode:
@@ -382,7 +386,6 @@ def run_matching_v2(db: Session, min_score: float = 0.5, clear_existing: bool = 
                 if is_match and score > best_score:
                     best_match = ep
                     best_score = score
-                    best_reason = reason
 
         # Try partial match if no exact match
         if not best_match:
@@ -394,7 +397,6 @@ def run_matching_v2(db: Session, min_score: float = 0.5, clear_existing: bool = 
                 if is_match and score > best_score:
                     best_match = ep
                     best_score = score
-                    best_reason = reason
 
         # Apply match if score meets threshold
         if best_match and best_score >= min_score:
@@ -425,11 +427,11 @@ def analyze_unmatched(db: Session) -> dict:
     """미매칭 분석."""
     # Get lookup tables
     event_types = {et.id: et.code for et in db.query(EventType).all()}
-    regions = {r.id: r.code for r in db.query(Region).all()}
+    {r.id: r.code for r in db.query(Region).all()}
 
     # Groups without match
     unmatched_groups = db.query(AssetGroup).filter(
-        AssetGroup.pokergo_episode_id == None
+        AssetGroup.pokergo_episode_id is None
     ).all()
 
     # Analyze by type and year

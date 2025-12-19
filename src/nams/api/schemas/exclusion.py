@@ -1,6 +1,6 @@
 """Pydantic schemas for Exclusion Rules."""
 from datetime import datetime
-from typing import Literal, Optional
+from typing import Literal
 
 from pydantic import BaseModel, field_validator
 
@@ -13,7 +13,7 @@ class ExclusionRuleBase(BaseModel):
     rule_type: RuleType
     operator: Operator
     value: str
-    description: Optional[str] = None
+    description: str | None = None
     is_active: bool = True
 
     @field_validator("value")
@@ -36,11 +36,11 @@ class ExclusionRuleCreate(ExclusionRuleBase):
 
 class ExclusionRuleUpdate(BaseModel):
     """Exclusion rule update schema."""
-    rule_type: Optional[RuleType] = None
-    operator: Optional[Operator] = None
-    value: Optional[str] = None
-    description: Optional[str] = None
-    is_active: Optional[bool] = None
+    rule_type: RuleType | None = None
+    operator: Operator | None = None
+    value: str | None = None
+    description: str | None = None
+    is_active: bool | None = None
 
 
 class ExclusionRuleResponse(ExclusionRuleBase):
@@ -64,9 +64,9 @@ class ExclusionRuleTestRequest(BaseModel):
     rule_type: RuleType
     operator: Operator
     value: str
-    sample_filename: Optional[str] = None
-    sample_size_bytes: Optional[int] = None
-    sample_duration_sec: Optional[int] = None
+    sample_filename: str | None = None
+    sample_size_bytes: int | None = None
+    sample_duration_sec: int | None = None
 
 
 class ExclusionRuleTestResult(BaseModel):
