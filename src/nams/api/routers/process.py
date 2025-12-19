@@ -56,7 +56,10 @@ async def migrate_json_data(request: MigrationRequest):
 
         return MigrationResponse(
             success=True,
-            message=f"Successfully imported {stats['pokergo_episodes']} episodes, {stats['groups']} groups, {stats['files']} files",
+            message=(
+                f"Successfully imported {stats['pokergo_episodes']} episodes, "
+                f"{stats['groups']} groups, {stats['files']} files"
+            ),
             stats=stats,
         )
     except Exception as e:
@@ -126,7 +129,10 @@ async def scan_nas(request: ScanRequest):
 
         return ScanResponse(
             success=True,
-            message=f"Scanned {stats['origin_files']} origin + {stats['archive_files']} archive files. Added {stats['new_files']} new files.",
+            message=(
+                f"Scanned {stats['origin_files']} origin + {stats['archive_files']} archive files. "
+                f"Added {stats['new_files']} new files."
+            ),
             stats=stats,
         )
     except Exception as e:
@@ -243,7 +249,10 @@ async def google_sheets_status():
     """Check Google Sheets API availability."""
     return {
         "available": GOOGLE_SHEETS_AVAILABLE,
-        "message": "Google Sheets API is available" if GOOGLE_SHEETS_AVAILABLE else "Install: pip install google-api-python-client google-auth"
+        "message": (
+            "Google Sheets API is available" if GOOGLE_SHEETS_AVAILABLE
+            else "Install: pip install google-api-python-client google-auth"
+        )
     }
 
 
@@ -270,7 +279,10 @@ async def extract_metadata():
         stats = run_pattern_extraction()
         return ProcessResponse(
             success=True,
-            message=f"Processed {stats['processed']} files, matched {stats['matched']}, updated {stats['updated']}",
+            message=(
+                f"Processed {stats['processed']} files, "
+                f"matched {stats['matched']}, updated {stats['updated']}"
+            ),
             stats=stats,
         )
     except Exception as e:
@@ -294,7 +306,10 @@ async def auto_group_files():
         stats = run_grouping()
         return ProcessResponse(
             success=True,
-            message=f"Processed {stats['processed']} files, grouped {stats['grouped']}, created {stats['new_groups']} new groups",
+            message=(
+                f"Processed {stats['processed']} files, grouped {stats['grouped']}, "
+                f"created {stats['new_groups']} new groups"
+            ),
             stats=stats,
         )
     except Exception as e:
@@ -386,16 +401,18 @@ async def run_full_pipeline(request: PipelineRequest):
         if request.match:
             all_stats['match'] = run_matching(min_score=request.min_match_score)
 
-        # Summary
-        summary_parts = []
-        if 'scan' in all_stats:
-            summary_parts.append(f"scanned {all_stats['scan'].get('new_files', 0)} new files")
-        if 'extract' in all_stats:
-            summary_parts.append(f"extracted {all_stats['extract'].get('updated', 0)} metadata")
-        if 'group' in all_stats:
-            summary_parts.append(f"grouped {all_stats['group'].get('grouped', 0)} files")
-        if 'match' in all_stats:
-            summary_parts.append(f"matched {all_stats['match'].get('matched', 0)} groups")
+        # Summary - build message from completed steps
+        summary_templates = {
+            'scan': ('scanned', 'new_files'),
+            'extract': ('extracted', 'updated'),
+            'group': ('grouped', 'grouped'),
+            'match': ('matched', 'matched'),
+        }
+        summary_parts = [
+            f"{action} {all_stats[step].get(key, 0)} {'files' if step != 'match' else 'groups'}"
+            for step, (action, key) in summary_templates.items()
+            if step in all_stats
+        ]
 
         return ProcessResponse(
             success=True,
