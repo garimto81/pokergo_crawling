@@ -1,0 +1,22 @@
+{
+  "name": "sheet2sheet-migration",
+  "version": "1.0.0",
+  "description": "Sheet to Sheet Migration PWA",
+  "type": "module",
+  "scripts": {
+    "dev": "cd pwa && npm run dev",
+    "build": "cd pwa && npm run build",
+    "preview": "cd pwa && npm run preview",
+    "gas:push": "cd gas && clasp push",
+    "gas:deploy": "cd gas && clasp deploy",
+    "gas:open": "cd gas && clasp open"
+  },
+  "keywords": [
+    "google-sheets",
+    "migration",
+    "pwa",
+    "clasp"
+  ],
+  "author": "",
+  "license": "MIT"
+}
