@@ -1,22 +1,23 @@
 """Group management API router for NAMS."""
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import func
 
-from ..database import get_db, AssetGroup, NasFile, Region, EventType
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import func
+from sqlalchemy.orm import Session, joinedload
+
+from ..database import AssetGroup, NasFile, get_db
 from ..schemas import (
-    AssetGroupResponse,
-    AssetGroupListResponse,
-    AssetGroupDetailResponse,
     AssetGroupCreate,
+    AssetGroupDetailResponse,
+    AssetGroupListResponse,
+    AssetGroupResponse,
     AssetGroupUpdate,
-    GroupSetPrimaryRequest,
     GroupMergeRequest,
+    GroupSetPrimaryRequest,
     GroupSplitRequest,
     MessageResponse,
-    PaginatedResponse,
     NasFileListResponse,
+    PaginatedResponse,
 )
 
 router = APIRouter()

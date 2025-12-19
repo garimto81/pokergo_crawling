@@ -1,18 +1,14 @@
 """Export service for NAMS - Google Sheets and CSV export."""
 import csv
 import json
-from pathlib import Path
+import re
 from datetime import datetime
 from io import StringIO
+from pathlib import Path
 
 from sqlalchemy.orm import Session
-from sqlalchemy import func
 
-from ..database import (
-    NasFile, AssetGroup, PokergoEpisode, Region, EventType,
-    get_db_context
-)
-
+from ..database import AssetGroup, EventType, NasFile, PokergoEpisode, Region, get_db_context
 
 # Export directory
 EXPORT_DIR = Path("D:/AI/claude01/pokergo_crawling/data/exports")
@@ -51,7 +47,6 @@ def _generate_match_reason(group: AssetGroup) -> str:
     if year and year >= 2011:
         # 특수 케이스 확인
         region_id = group.region_id
-        event_type_id = group.event_type_id
 
         # Europe/APAC/Paradise 등은 PokerGO에 없을 수 있음
         if region_id and region_id > 1:  # LV가 아닌 경우
@@ -115,7 +110,9 @@ def get_unmatched_pokergo_data(db: Session) -> list[dict]:
     # Get all matched episode IDs
     matched_ids = set(
         g.pokergo_episode_id
-        for g in db.query(AssetGroup).filter(AssetGroup.pokergo_episode_id != None).all()
+        for g in db.query(AssetGroup).filter(
+            AssetGroup.pokergo_episode_id.isnot(None)
+        ).all()
     )
 
     # Get unmatched episodes
@@ -404,6 +401,27 @@ def _is_archive_path(path: str) -> bool:
     return path_upper.startswith('Z:') or 'ARCHIVE' in path_upper
 
 
+# Pre-compiled regex for year extraction
+_YEAR_PATTERN = re.compile(r'\b(19|20)\d{2}\b')
+
+
+def _extract_year_from_text(*texts: str) -> int | None:
+    """Extract 4-digit year from text strings.
+
+    Args:
+        *texts: Variable text strings to search
+
+    Returns:
+        Year as int or None if not found
+    """
+    for text in texts:
+        if text:
+            match = _YEAR_PATTERN.search(text)
+            if match:
+                return int(match.group())
+    return None
+
+
 def get_full_matching_data(db: Session) -> tuple[list[dict], list[dict]]:
     """Get comprehensive matching data with Origin/Archive separation.
 
@@ -504,7 +522,9 @@ def get_full_matching_data(db: Session) -> tuple[list[dict], list[dict]]:
     # Get unmatched PokerGO episodes
     matched_ids = set(
         g.pokergo_episode_id
-        for g in db.query(AssetGroup).filter(AssetGroup.pokergo_episode_id != None).all()
+        for g in db.query(AssetGroup).filter(
+            AssetGroup.pokergo_episode_id.isnot(None)
+        ).all()
     )
 
     if matched_ids:
@@ -519,14 +539,7 @@ def get_full_matching_data(db: Session) -> tuple[list[dict], list[dict]]:
     unmatched_pokergo = []
     for ep in unmatched_episodes:
         # Extract year from title or collection
-        year = None
-        import re
-        for text in [ep.title, ep.collection_title]:
-            if text:
-                match = re.search(r'\b(19|20)\d{2}\b', text)
-                if match:
-                    year = int(match.group())
-                    break
+        year = _extract_year_from_text(ep.title, ep.collection_title)
 
         # Generate match reason
         if year and year < 2019:
@@ -767,7 +780,10 @@ def export_to_google_sheets(sheet_name: str = "NAMS Export") -> dict:
     if not GOOGLE_SHEETS_AVAILABLE:
         return {
             "success": False,
-            "error": "Google Sheets API not available. Install: pip install google-api-python-client google-auth"
+            "error": (
+                "Google Sheets API not available. "
+                "Install: pip install google-api-python-client google-auth"
+            )
         }
 
     if not CREDENTIALS_PATH.exists():

@@ -1,10 +1,10 @@
 """Catalog service for generating standard titles for NAS groups."""
 import re
 from typing import Optional
+
 from sqlalchemy.orm import Session
 
-from ..database import AssetGroup, Region, EventType, get_db_context
-
+from ..database import AssetGroup, EventType, Region
 
 # Event type display names
 EVENT_TYPE_NAMES = {

@@ -10,13 +10,15 @@ from pathlib import Path
 
 # Load .env file
 from dotenv import load_dotenv
+
 env_path = Path(__file__).parent.parent.parent.parent.parent / '.env'
 load_dotenv(env_path)
-from typing import Optional
 from dataclasses import dataclass
+from typing import Optional
+
 from sqlalchemy.orm import Session
 
-from ..database.models import CategoryEntry, Category, NasFile
+from ..database.models import Category, CategoryEntry
 
 
 @dataclass

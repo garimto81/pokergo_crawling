@@ -1,10 +1,10 @@
 """Statistics API router for NAMS."""
 from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
 from sqlalchemy import func
+from sqlalchemy.orm import Session
 
-from ..database import get_db, NasFile, AssetGroup, Region, EventType, PokergoEpisode
-from ..schemas import OverviewStats, YearStats, RegionStats
+from ..database import AssetGroup, EventType, NasFile, Region, get_db
+from ..schemas import OverviewStats, RegionStats, YearStats
 from ..services.matching import get_matching_summary
 
 router = APIRouter()

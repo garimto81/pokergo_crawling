@@ -2,14 +2,14 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from ..database import get_db, ExclusionRule
+from ..database import ExclusionRule, get_db
 from ..schemas import (
-    ExclusionRuleResponse,
     ExclusionRuleCreate,
-    ExclusionRuleUpdate,
     ExclusionRuleListResponse,
+    ExclusionRuleResponse,
     ExclusionRuleTestRequest,
     ExclusionRuleTestResult,
+    ExclusionRuleUpdate,
     MessageResponse,
 )
 

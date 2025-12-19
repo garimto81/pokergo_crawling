@@ -1,7 +1,7 @@
 """Common Pydantic schemas for NAMS API."""
-from typing import Optional, Generic, TypeVar
+from typing import Generic, Optional, TypeVar
+
 from pydantic import BaseModel
-from datetime import datetime
 
 T = TypeVar("T")
 

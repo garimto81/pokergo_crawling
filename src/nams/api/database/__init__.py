@@ -1,17 +1,17 @@
 """Database package for NAMS."""
-from .models import (
-    Base,
-    Pattern,
-    Region,
-    EventType,
-    AssetGroup,
-    NasFile,
-    AuditLog,
-    PokergoEpisode,
-    ExclusionRule,
-)
-from .session import engine, SessionLocal, get_db, get_db_context
 from .init_db import init_database
+from .models import (
+    AssetGroup,
+    AuditLog,
+    Base,
+    EventType,
+    ExclusionRule,
+    NasFile,
+    Pattern,
+    PokergoEpisode,
+    Region,
+)
+from .session import SessionLocal, engine, get_db, get_db_context
 
 __all__ = [
     "Base",

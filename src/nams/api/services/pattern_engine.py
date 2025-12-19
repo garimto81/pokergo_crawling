@@ -2,9 +2,10 @@
 import re
 from dataclasses import dataclass
 from typing import Optional
+
 from sqlalchemy.orm import Session
 
-from ..database import Pattern, NasFile, Region, EventType, get_db_context
+from ..database import EventType, NasFile, Pattern, Region, get_db_context
 
 
 @dataclass

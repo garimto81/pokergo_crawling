@@ -1,19 +1,22 @@
 """Catalog Validator API endpoints."""
-import os
 import json
+import os
 from datetime import datetime
-from typing import Optional, List
+from typing import List, Optional
+
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
-from sqlalchemy import func
 from pydantic import BaseModel
+from sqlalchemy import func
+from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..database.models import (
-    CategoryEntry, Category, NasFile, AuditLog,
-    ScanHistory, ValidationSession
+    AuditLog,
+    Category,
+    CategoryEntry,
+    NasFile,
+    ScanHistory,
 )
-
 
 router = APIRouter(prefix="/api/validator", tags=["validator"])
 

@@ -3,7 +3,17 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .database import init_database
-from .routers import patterns, settings, files, groups, stats, process, exclusions, categories, validator
+from .routers import (
+    categories,
+    exclusions,
+    files,
+    groups,
+    patterns,
+    process,
+    settings,
+    stats,
+    validator,
+)
 
 # Initialize database on startup
 init_database()
