@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 NAMS (NAS Asset Management System) - WSOP 영상 파일 통합 관리 및 PokerGO 메타데이터 매칭 시스템.
 
-**Version**: 2.0.0 | **Date**: 2025-12-19
+**Version**: 2.1.0 | **Date**: 2025-12-19
 
 **핵심 기능:**
 - NAS 파일 스캔 및 메타데이터 추출 (Y:/Z:/X: 드라이브)
@@ -41,36 +41,19 @@ python scripts/export_4sheets.py
 
 ```
 src/nams/
-├── api/                           # FastAPI 백엔드
-│   ├── main.py                    # FastAPI 앱 엔트리포인트
-│   ├── database/
-│   │   ├── models.py              # SQLAlchemy 모델 (NasFile, Pattern, FileGroup, CatalogEntry)
-│   │   ├── session.py             # DB 세션 관리
-│   │   └── init_db.py             # 초기 데이터 (패턴, 지역, 이벤트 타입)
-│   ├── routers/                   # API 엔드포인트
-│   │   ├── files.py               # 파일 CRUD
-│   │   ├── groups.py              # Asset Group 관리
-│   │   ├── patterns.py            # 패턴 관리
-│   │   ├── process.py             # 스캔/내보내기
-│   │   ├── stats.py               # 통계
-│   │   ├── categories.py          # 카테고리 관리
-│   │   ├── exclusions.py          # 제외 규칙
-│   │   └── validator.py           # 매칭 검증
+├── api/                           # FastAPI 백엔드 (포트 8001)
+│   ├── main.py                    # 앱 엔트리포인트
+│   ├── database/                  # SQLAlchemy 모델, 세션, 초기화
+│   ├── routers/                   # API 엔드포인트 (files, groups, patterns, process, stats)
 │   └── services/                  # 비즈니스 로직
-│       ├── pattern_engine.py      # 핵심: 정규식 패턴 매칭 엔진
-│       ├── scanner.py             # NAS 스캔 서비스
-│       ├── grouping.py            # Asset Grouping (Primary/Backup)
-│       ├── matching.py            # PokerGO 매칭 서비스
-│       ├── matching_v2.py         # 개선된 매칭 (Era별)
-│       ├── category_matching.py   # 카테고리 기반 매칭
-│       ├── catalog_service.py     # 카탈로그 생성
-│       ├── title_generation.py    # Netflix 스타일 제목 생성
+│       ├── pattern_engine.py      # ⭐ 핵심: 정규식 패턴 매칭 엔진
+│       ├── scanner.py             # NAS 스캔
+│       ├── grouping.py            # Primary/Backup 그룹핑
+│       ├── matching_v2.py         # PokerGO 매칭 (Era별)
 │       └── export.py              # Google Sheets/CSV/JSON 내보내기
 │
-└── ui/                            # React 프론트엔드
-    └── src/
-        ├── pages/                 # Dashboard, Files, Groups, Patterns, Entries, Validator
-        └── components/
+└── ui/                            # React 프론트엔드 (포트 5174)
+    └── src/pages/                 # Dashboard, Files, Groups, Patterns, Entries, Validator
 ```
 
 ## Data Flow
@@ -114,8 +97,15 @@ ruff check src/nams/ --fix
 # API 서버 실행
 cd src/nams/api && uvicorn main:app --reload --port 8001
 
-# 패턴 엔진 테스트
+# 테스트 (개별 파일 권장 - 전체 테스트 120초 초과 시 타임아웃)
+pytest tests/test_specific.py -v
+pytest tests/test_pattern_engine.py -v
+
+# 패턴 엔진 테스트 (스크립트)
 python scripts/test_pattern_engine.py
+
+# DB 초기화 (API 서버 시작 시 자동 실행, 수동 시)
+python -c "from src.nams.api.database.init_db import init_db; init_db()"
 ```
 
 ### Frontend
@@ -231,38 +221,24 @@ data/
 
 ## Documentation
 
-```
-docs/
-├── README.md                      # 문서 인덱스
-├── [Architecture]
-│   └── SYSTEM_OVERVIEW.md         # 시스템 아키텍처 (v2.1)
-├── [PRD]
-│   ├── PRD-NAMS-MATCHING.md       # 매칭 시스템 PRD (v2.0)
-│   ├── PRD-POKERGO-SOURCE.md      # X: 드라이브 통합 PRD
-│   ├── PRD-CATALOG-DB.md          # 카탈로그 DB PRD
-│   └── PRD-NAMS-REFACTORING.md    # 기술 부채 로드맵
-├── [Operations]
-│   ├── AUTOMATION_PIPELINE.md     # 파이프라인 실행 가이드
-│   └── DASHBOARD_GUIDE.md         # UI 사용 가이드
-├── [Technical Reference]
-│   ├── MATCHING_RULES.md          # 매칭 규칙 핵심 (v5.11)
-│   ├── MATCHING_PATTERNS_DETAIL.md # 패턴 상세/변경이력
-│   ├── MATCHING_STRATEGY_2024.md  # 2024 매칭 전략
-│   ├── MATCHING_STRATEGY_2025.md  # 2025 매칭 전략
-│   └── NAS_DRIVE_STRUCTURE.md     # 드라이브 물리 구조
-└── [Archive]
-    └── (레거시 문서)
-```
+| 카테고리 | 문서 | 내용 |
+|----------|------|------|
+| **Architecture** | `docs/SYSTEM_OVERVIEW.md` | 시스템 아키텍처 (v2.1) |
+| **PRD** | `docs/PRD-NAMS-MATCHING.md` | 매칭 시스템 PRD (v2.0) |
+| | `docs/PRD-CATALOG-DB.md` | 카탈로그 DB PRD |
+| **Technical** | `docs/MATCHING_RULES.md` | 매칭 규칙 핵심 (v5.11) |
+| | `docs/MATCHING_PATTERNS_DETAIL.md` | 패턴 상세, 변경 이력 |
+| | `docs/NAS_DRIVE_STRUCTURE.md` | X:/Y:/Z: 드라이브 폴더 구조 |
+| **Operations** | `docs/AUTOMATION_PIPELINE.md` | 파이프라인 실행, 트러블슈팅 |
+| | `docs/DASHBOARD_GUIDE.md` | UI 사용 가이드 |
 
-## References
+## Troubleshooting
 
-| 문서 | 내용 |
-|------|------|
-| `docs/MATCHING_RULES.md` | 매칭 규칙 핵심 (v5.11) |
-| `docs/MATCHING_PATTERNS_DETAIL.md` | 패턴 상세 예시, 변경 이력 |
-| `docs/MATCHING_STRATEGY_2024.md` | 2024년 매칭 전략 |
-| `docs/MATCHING_STRATEGY_2025.md` | 2025년 매칭 전략 |
-| `docs/PRD-CATALOG-DB.md` | 카탈로그 DB PRD |
-| `docs/AUTOMATION_PIPELINE.md` | 파이프라인 실행, 트러블슈팅 |
-| `docs/SYSTEM_OVERVIEW.md` | 시스템 아키텍처 (v2.1) |
-| `docs/NAS_DRIVE_STRUCTURE.md` | X:/Y:/Z: 드라이브 폴더 구조 |
+| 문제 | 원인 | 해결 |
+|------|------|------|
+| NAS 드라이브 접근 불가 | 네트워크 마운트 해제 | Y:/Z:/X: 드라이브 마운트 확인 |
+| 패턴 매칭 실패 | 새 파일명 패턴 | `test_pattern_engine.py` 실행, 패턴 추가 |
+| DB 손상/초기화 필요 | 스키마 변경 | `data/nams/nams.db` 삭제 후 API 재시작 |
+| API 서버 시작 실패 | 포트 충돌 | `netstat -ano | findstr 8001` 확인 |
+| 전체 테스트 타임아웃 | 120초 제한 | 개별 테스트 파일로 실행 권장 |
+| 매칭률 저하 | Region/Event 불일치 | `docs/MATCHING_RULES.md` DUPLICATE 방지 규칙 확인 |
