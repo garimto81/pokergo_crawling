@@ -1,0 +1,100 @@
+# pokergo_crawling_checklist.yaml
+# NAMS 프로젝트 작업 관리 체크리스트
+# 모든 작업은 서브 에이전트가 수행하고 결과를 여기에 기록
+
+version: "1.0"
+project: "pokergo_crawling"
+updated_at: "2025-12-19T20:00:00"
+
+# 현재 진행 중인 작업
+current_task: null
+
+# 작업 목록
+tasks:
+  - id: "TASK-001"
+    title: "Validator 스크립트 및 export.py 리팩토링"
+    description: "Phase 1 Validator 완성 + export.py 헬퍼 함수 추출"
+    status: "completed"
+    priority: "high"
+    category: "feature"
+    created_at: "2025-12-19T12:00:00"
+    completed_at: "2025-12-19T14:00:00"
+    agent: "general-purpose"
+    result:
+      success: true
+      message: "Validator 스크립트 4개 생성, export.py 리팩토링 완료"
+      files_changed:
+        - "scripts/daily_scan.py"
+        - "scripts/sync_sheets.py"
+        - "src/nams/api/services/change_tracker.py"
+        - "docs/SCHEDULER_SETUP.md"
+        - "src/nams/api/services/export.py"
+      commits:
+        - "9e4be74"
+        - "3c21d1f"
+      pr: "#3"
+
+  - id: "TASK-002"
+    title: "process.py 리팩토링"
+    description: "run_full_pipeline() Summary 간소화 및 E501 린트 수정"
+    status: "completed"
+    priority: "medium"
+    category: "refactoring"
+    created_at: "2025-12-19T14:30:00"
+    completed_at: "2025-12-19T15:00:00"
+    agent: "general-purpose"
+    result:
+      success: true
+      message: "Summary 템플릿 적용, 5개 E501 오류 수정"
+      files_changed:
+        - "src/nams/api/routers/process.py"
+      commits:
+        - "e06744f"
+      pr: "#4"
+
+  - id: "TASK-003"
+    title: "E2E 테스트 작성"
+    description: "Playwright E2E 테스트 6개 페이지 작성 + API 미실행 시에도 통과하도록 개선"
+    status: "completed"
+    priority: "medium"
+    category: "test"
+    created_at: "2025-12-19T15:30:00"
+    completed_at: "2025-12-19T20:00:00"
+    agent: "test-engineer"
+    result:
+      success: true
+      message: "64/64 테스트 통과 (21개 실패 → 0개 실패)"
+      files_changed:
+        - "src/nams/ui/e2e/dashboard.spec.ts"
+        - "src/nams/ui/e2e/files.spec.ts"
+        - "src/nams/ui/e2e/groups.spec.ts"
+        - "src/nams/ui/e2e/patterns.spec.ts"
+        - "src/nams/ui/e2e/settings.spec.ts"
+        - "src/nams/ui/e2e/validator.spec.ts"
+        - "src/nams/ui/e2e/README.md"
+        - "src/nams/ui/src/App.tsx"
+      commits:
+        - "1e47b0c"
+      branch: "feat/e2e-test-improvements"
+
+# 대기 중인 작업
+pending_tasks:
+  - id: "TASK-004"
+    title: "남은 Lint 오류 수정"
+    description: "기존 코드 98개 린트 오류 수정"
+    status: "pending"
+    priority: "low"
+    category: "refactoring"
+
+# 완료된 작업 통계
+stats:
+  total: 4
+  completed: 3
+  failed: 0
+  pending: 1
+  by_category:
+    feature: 1
+    refactoring: 1
+    test: 1
+    bugfix: 0
+    docs: 0
