@@ -8,6 +8,7 @@ import { Groups } from './pages/Groups';
 import { Patterns } from './pages/Patterns';
 import { Settings } from './pages/Settings';
 import { Entries } from './pages/Entries';
+import { Validator } from './pages/Validator';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -32,6 +33,7 @@ function App() {
             <Route path="/entries" element={<Entries />} />
             <Route path="/patterns" element={<Patterns />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="/validator" element={<Validator />} />
           </Routes>
         </Layout>
       </BrowserRouter>

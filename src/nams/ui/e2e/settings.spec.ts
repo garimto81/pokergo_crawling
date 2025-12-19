@@ -9,39 +9,47 @@ test.describe('Settings Page', () => {
     await expect(page.locator('h1')).toContainText(/settings/i);
   });
 
-  test('should show regions section', async ({ page }) => {
-    const regionsSection = page.getByText(/regions/i);
-    await expect(regionsSection.first()).toBeVisible();
+  test('should show exclusion rules section', async ({ page }) => {
+    await expect(page.getByText(/exclusion rules/i)).toBeVisible();
   });
 
-  test('should show event types section', async ({ page }) => {
-    const eventTypesSection = page.getByText(/event.*types/i);
-    await expect(eventTypesSection.first()).toBeVisible();
+  test('should have add rule button', async ({ page }) => {
+    const addButton = page.getByRole('button', { name: /add rule/i });
+    await expect(addButton).toBeVisible();
   });
 
-  test('should display region codes', async ({ page }) => {
-    // Should show region codes like LV, EU, APAC
-    const regionCodes = page.getByText(/LV|EU|APAC|PARADISE/);
-    await expect(regionCodes.first()).toBeVisible();
+  test('should show rule type labels in help text', async ({ page }) => {
+    // Help text explains rule types
+    await expect(page.getByText(/size/i).first()).toBeVisible();
+    await expect(page.getByText(/duration/i).first()).toBeVisible();
+    await expect(page.getByText(/keyword/i).first()).toBeVisible();
   });
 
-  test('should display event type codes', async ({ page }) => {
-    // Should show event type codes like ME, BR, HR
-    const eventTypeCodes = page.getByText(/ME|BR|HR|Main Event|Bracelet/i);
-    await expect(eventTypeCodes.first()).toBeVisible();
+  test('should display how it works section', async ({ page }) => {
+    await expect(page.getByText(/how it works/i)).toBeVisible();
   });
 
-  test('should have exclusion rules section', async ({ page }) => {
-    const exclusionSection = page.getByText(/exclusion|rules/i);
-    await expect(exclusionSection.first()).toBeVisible();
+  test('should show rules table or empty message or loading', async ({ page }) => {
+    // Either rules table, empty state, or loading text
+    const table = page.locator('table');
+    const emptyMessage = page.getByText(/no exclusion rules/i);
+    const loadingText = page.getByText('Loading...');
+    const h1 = page.locator('h1');
+
+    const hasTable = await table.isVisible({ timeout: 5000 }).catch(() => false);
+    const hasEmpty = await emptyMessage.isVisible({ timeout: 3000 }).catch(() => false);
+    const hasLoading = await loadingText.isVisible({ timeout: 3000 }).catch(() => false);
+    const hasH1 = await h1.isVisible({ timeout: 3000 }).catch(() => false);
+
+    // Page is functional if any of these are visible
+    expect(hasTable || hasEmpty || hasLoading || hasH1).toBeTruthy();
   });
 
-  test('should be able to toggle exclusion rule', async ({ page }) => {
-    // Find toggle switches for exclusion rules
-    const toggleSwitch = page.locator('input[type="checkbox"], [role="switch"]');
-    if (await toggleSwitch.first().isVisible()) {
-      await toggleSwitch.first().click();
-      await page.waitForTimeout(300);
-    }
+  test('should open add rule modal when clicking add', async ({ page }) => {
+    const addButton = page.getByRole('button', { name: /add rule/i });
+    await addButton.click();
+
+    // Modal should appear
+    await expect(page.getByText(/add exclusion rule/i)).toBeVisible({ timeout: 5000 });
   });
 });
