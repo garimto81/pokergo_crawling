@@ -8,11 +8,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 서브 프로젝트
 
-| 프로젝트 | 용도 | 기술 스택 |
-|----------|------|-----------|
-| `sheet2sheet/` | Sheets 간 마이그레이션 PWA | CLASP + React 19 |
-| `sheet2iconik/` | Sheets → Iconik 업로드 | Python 3.11+ / httpx |
-| `iconik2sheet/` | Iconik → Sheets 내보내기 | Python 3.11+ / httpx |
+| 프로젝트 | 용도 | 기술 스택 | 상세 문서 |
+|----------|------|-----------|-----------|
+| `sheet2sheet/` | Sheets 간 마이그레이션 PWA | CLASP + React 19 | `sheet2sheet/CLAUDE.md` |
+| `sheet2iconik/` | Sheets → Iconik 업로드 | Python 3.11+ / httpx | `sheet2iconik/CLAUDE.md` |
+| `iconik2sheet/` | Iconik → Sheets 내보내기 | Python 3.11+ / httpx | `iconik2sheet/CLAUDE.md` |
 
 ## Commands
 
@@ -23,13 +23,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 cd sheet2sheet/gas
 clasp push && clasp deploy
 
-# PWA 개발 (port 5175)
+# PWA 개발 (port 5175 - NAMS UI 5174와 충돌 방지)
 cd sheet2sheet/pwa
 npm install && npm run dev
 npm run lint && npm run build
+
+# 루트에서 실행
+cd sheet2sheet
+npm run dev          # PWA 개발 서버
+npm run gas:push     # GAS 푸시
 ```
 
-### sheet2iconik / iconik2sheet (Python)
+### Python 프로젝트 (sheet2iconik / iconik2sheet)
 
 ```powershell
 cd sheet2iconik  # 또는 iconik2sheet
@@ -43,11 +48,15 @@ cp .env.example .env
 # 실행
 python -m scripts.test_connection    # 연결 테스트
 python -m scripts.dry_run            # Dry run (sheet2iconik)
+python -m scripts.migrate            # 마이그레이션 (sheet2iconik)
 python -m scripts.run_full_sync      # 전체 동기화 (iconik2sheet)
+python -m scripts.run_incremental    # 증분 동기화 (iconik2sheet)
 
 # 린트/테스트
 ruff check . --fix
-pytest tests/ -v
+pytest tests/ -v                     # 전체 테스트
+pytest tests/test_client.py -v       # 개별 테스트 (권장)
+pytest tests/test_client.py::test_health_check -v  # 단일 테스트
 ```
 
 ## Architecture
@@ -56,17 +65,23 @@ pytest tests/ -v
 
 ```
 project/
-├── config/settings.py     # Pydantic Settings (환경변수: ICONIK_*, GOOGLE_*)
-├── clients/               # API 클라이언트 (httpx)
+├── config/settings.py     # Pydantic Settings (ICONIK_*, GOOGLE_*)
+├── clients/ 또는 iconik/  # API 클라이언트 (httpx + tenacity)
 ├── services/ 또는 sync/   # 비즈니스 로직
 └── scripts/               # CLI 엔트리포인트 (-m 실행)
 ```
 
-### 설정 패턴
+### API 클라이언트 패턴
 
-- `pydantic-settings` 사용
-- `.env` 파일 로드 (`python-dotenv`)
-- `get_settings()` 함수로 캐싱된 설정 조회
+```python
+# Context manager 지원
+with IconikClient() as client:
+    asset = client.get_asset("asset-id")
+
+# 설정 조회
+from config.settings import get_settings
+settings = get_settings()  # 캐싱된 인스턴스
+```
 
 ### 환경 변수
 
@@ -86,12 +101,12 @@ GOOGLE_SPREADSHEET_ID=spreadsheet-id
 각 서브 프로젝트는 **완전 독립적**:
 - 자체 의존성 관리 (package.json / pyproject.toml)
 - 별도의 가상환경
-- 별도의 Claude Code 세션에서 개발 권장
+- **별도의 Claude Code 세션**에서 개발 권장 (각 프로젝트 디렉토리에서 실행)
 
 ## Key Docs
 
 | 문서 | 내용 |
 |------|------|
-| `docs/prds/PRD-SHEET2SHEET.md` | Sheet to Sheet PRD |
-| `docs/prds/PRD-SHEET2ICONIK.md` | Sheet to Iconik PRD |
-| `docs/prds/PRD-ICONIK2SHEET.md` | Iconik to Sheet PRD |
+| `../../docs/prds/PRD-SHEET2SHEET.md` | Sheet to Sheet PRD |
+| `../../docs/prds/PRD-SHEET2ICONIK.md` | Sheet to Iconik PRD |
+| `../../docs/prds/PRD-ICONIK2SHEET.md` | Iconik to Sheet PRD |
