@@ -3,9 +3,6 @@
 import uuid
 from datetime import datetime
 
-from rich.console import Console
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
-
 from iconik import IconikClient
 from sheets import SheetsWriter
 
@@ -19,7 +16,6 @@ class FullSync:
         self.iconik = IconikClient()
         self.sheets = SheetsWriter()
         self.state = SyncState()
-        self.console = Console()
 
     def run(self) -> dict:
         """Run full sync.
@@ -30,7 +26,7 @@ class FullSync:
         sync_id = str(uuid.uuid4())[:8]
         started_at = datetime.now()
 
-        self.console.print(f"[bold blue]Starting full sync[/bold blue] (ID: {sync_id})")
+        print(f"Starting full sync (ID: {sync_id})")
 
         result = {
             "sync_id": sync_id,
@@ -63,16 +59,16 @@ class FullSync:
             # Write sync log
             self.sheets.write_sync_log(result)
 
-            self.console.print(f"[bold green]Sync complete![/bold green]")
-            self.console.print(f"  Assets: {len(assets)}")
-            self.console.print(f"  Collections: {len(collections)}")
+            print("Sync complete!")
+            print(f"  Assets: {len(assets)}")
+            print(f"  Collections: {len(collections)}")
 
         except Exception as e:
             result["status"] = "failed"
             result["completed_at"] = datetime.now()
             self.sheets.write_sync_log(result)
 
-            self.console.print(f"[bold red]Sync failed:[/bold red] {e}")
+            print(f"Sync failed: {e}")
             raise
 
         finally:
@@ -82,43 +78,38 @@ class FullSync:
 
     def _sync_assets(self) -> list[dict]:
         """Sync all assets."""
-        self.console.print("[blue]Fetching assets...[/blue]")
+        print("Fetching assets...")
 
         assets = []
+        count = 0
 
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            TaskProgressColumn(),
-            console=self.console,
-        ) as progress:
-            task = progress.add_task("Assets", total=None)
+        for asset in self.iconik.get_all_assets():
+            assets.append(asset.model_dump())
+            count += 1
+            if count % 100 == 0:
+                print(f"  ... {count} assets fetched")
 
-            for asset in self.iconik.get_all_assets(progress=progress, task_id=task):
-                assets.append(asset.model_dump())
-
-        self.console.print(f"  Fetched {len(assets)} assets")
+        print(f"  Fetched {len(assets)} assets")
 
         # Write to sheet
-        self.console.print("[blue]Writing to Iconik_Assets sheet...[/blue]")
+        print("Writing to Iconik_Assets sheet...")
         self.sheets.write_assets(assets)
 
         return assets
 
     def _sync_collections(self) -> list[dict]:
         """Sync all collections."""
-        self.console.print("[blue]Fetching collections...[/blue]")
+        print("Fetching collections...")
 
         collections = []
 
         for collection in self.iconik.get_all_collections():
             collections.append(collection.model_dump())
 
-        self.console.print(f"  Fetched {len(collections)} collections")
+        print(f"  Fetched {len(collections)} collections")
 
         # Write to sheet
-        self.console.print("[blue]Writing to Iconik_Collections sheet...[/blue]")
+        print("Writing to Iconik_Collections sheet...")
         self.sheets.write_collections(collections)
 
         return collections
