@@ -60,7 +60,6 @@ class IconikClient:
         params = {
             "page": page,
             "per_page": per_page or self.per_page,
-            "sort": "created_at",
         }
         data = self._get("/assets/v1/assets/", params=params)
         return IconikPaginatedResponse(**data)
@@ -95,6 +94,39 @@ class IconikClient:
     def get_asset_metadata(self, asset_id: str, view_id: str) -> dict[str, Any]:
         """Get asset metadata for a specific view."""
         return self._get(f"/metadata/v1/assets/{asset_id}/views/{view_id}/")
+
+    def get_metadata_views(self) -> list[dict[str, Any]]:
+        """Get all metadata views.
+
+        Returns:
+            List of metadata view objects with id, name, description, view_fields
+        """
+        data = self._get("/metadata/v1/views/")
+        return data.get("objects", [])
+
+    def get_metadata_view(self, view_id: str) -> dict[str, Any]:
+        """Get a single metadata view by ID.
+
+        Args:
+            view_id: Metadata view UUID
+
+        Returns:
+            View object with id, name, description, view_fields
+        """
+        return self._get(f"/metadata/v1/views/{view_id}/")
+
+    # Segments API (timecodes for subclips)
+    def get_asset_segments(self, asset_id: str) -> list[dict[str, Any]]:
+        """Get asset segments (timecodes for subclips).
+
+        Args:
+            asset_id: Asset UUID
+
+        Returns:
+            List of segment objects with time_base, time_end, segment_type
+        """
+        data = self._get(f"/assets/v1/assets/{asset_id}/segments/")
+        return data.get("objects", [])
 
     # Collections API
     def get_collections_page(self, page: int = 1, per_page: int | None = None) -> IconikPaginatedResponse:

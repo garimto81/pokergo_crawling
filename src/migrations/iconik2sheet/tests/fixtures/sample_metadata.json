@@ -1,0 +1,24 @@
+{
+  "metadata_values": {
+    "description": "Phil Ivey bluffs with 72 offsuit against Daniel Negreanu",
+    "project_name": "WSOP 2024",
+    "project_name_tag": "WSOP24",
+    "search_tag": "bluff,all-in,river",
+    "year": 2024,
+    "location": "Las Vegas",
+    "venue": "Horseshoe",
+    "episode_event": "$10K Main Event Day 7",
+    "source": "PGM",
+    "scene": "Hand Clip",
+    "game_type": "NLH",
+    "players_tags": "Phil Ivey, Daniel Negreanu",
+    "hand_grade": "★★★",
+    "hand_tag": "72o vs AK",
+    "epic_hand": true,
+    "tournament": "WSOP Main Event",
+    "poker_play_tags": "bluff,hero call",
+    "adjective": "incredible",
+    "emotion": "intense",
+    "appearance_outfit": "casual"
+  }
+}

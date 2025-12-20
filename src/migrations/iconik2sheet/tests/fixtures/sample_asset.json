@@ -1,0 +1,11 @@
+{
+  "id": "12345678-1234-1234-1234-123456789abc",
+  "title": "WSOP 2024 Main Event Hand 42",
+  "external_id": "ext-001",
+  "status": "ACTIVE",
+  "is_online": true,
+  "analyze_status": "FINISHED",
+  "archive_status": null,
+  "created_at": "2024-01-15T10:30:00Z",
+  "updated_at": "2024-06-20T14:45:00Z"
+}

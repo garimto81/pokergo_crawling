@@ -1,0 +1,15 @@
+{
+  "objects": [
+    {
+      "id": "seg-001-uuid",
+      "asset_id": "12345678-1234-1234-1234-123456789abc",
+      "time_base": 125000,
+      "time_end": 180000,
+      "segment_type": "GENERIC"
+    }
+  ],
+  "page": 1,
+  "pages": 1,
+  "per_page": 100,
+  "total": 1
+}
