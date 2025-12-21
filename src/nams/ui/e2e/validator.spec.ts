@@ -231,12 +231,10 @@ test.describe('Validator Page', () => {
     const skipButton = page.getByRole('button', { name: /skip/i });
 
     if (await skipButton.isVisible() && await skipButton.isEnabled()) {
-      const entryCodeBefore = await page.locator('.font-mono.text-gray-600').textContent();
-
       await skipButton.click();
       await page.waitForTimeout(500);
 
-      // Entry code may change
+      // Entry code may change after skip
       const entryCodeAfter = await page.locator('.font-mono.text-gray-600').textContent();
       // Note: May be same if only one entry
       expect(typeof entryCodeAfter).toBe('string');
