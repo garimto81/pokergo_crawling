@@ -1,9 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Play,
   ChevronLeft,
-  ChevronRight,
   Check,
   SkipForward,
   RefreshCw,
@@ -11,7 +10,6 @@ import {
   Filter,
   Clock,
   CheckCircle,
-  AlertCircle,
   FileVideo,
   HardDrive
 } from 'lucide-react';
@@ -53,6 +51,13 @@ interface ValidatorStats {
   verification_rate: number;
   entries_by_year: Record<string, { total: number; verified: number }>;
   recent_verifications: number;
+}
+
+interface EntryChange {
+  id: number;
+  action: string;
+  changed_by: string;
+  changed_at: string;
 }
 
 // API functions
@@ -163,12 +168,15 @@ export function Validator() {
 
   const files: EntryFile[] = entryDetail?.files || [];
 
-  // Update edited title when entry changes
-  useEffect(() => {
+  // Sync edited title when entry changes using ref to track previous ID
+  const prevEntryIdRef = useRef<number | undefined>(undefined);
+  const currentEntryId = currentEntry?.id;
+  if (currentEntryId !== prevEntryIdRef.current) {
+    prevEntryIdRef.current = currentEntryId;
     if (currentEntry) {
       setEditedTitle(currentEntry.display_title || '');
     }
-  }, [currentEntry?.id]);
+  }
 
   // Mutations
   const updateMutation = useMutation({
@@ -502,7 +510,7 @@ export function Validator() {
         <div className="bg-white rounded-lg shadow-sm p-6">
           <h3 className="text-sm font-medium text-gray-700 mb-3">Recent Changes</h3>
           <div className="space-y-2">
-            {entryDetail.changes.slice(0, 5).map((change: any) => (
+            {entryDetail.changes.slice(0, 5).map((change: EntryChange) => (
               <div key={change.id} className="text-sm text-gray-600 flex items-center gap-2">
                 <Clock className="w-4 h-4 text-gray-400" />
                 <span>
