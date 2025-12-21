@@ -10,6 +10,7 @@ from .models import (
     Pattern,
     PokergoEpisode,
     Region,
+    ScanHistory,
 )
 from .session import SessionLocal, engine, get_db, get_db_context
 
@@ -23,6 +24,7 @@ __all__ = [
     "AuditLog",
     "PokergoEpisode",
     "ExclusionRule",
+    "ScanHistory",
     "engine",
     "SessionLocal",
     "get_db",
