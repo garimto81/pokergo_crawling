@@ -6,10 +6,16 @@ PRD-0010: Iconik API에서 전체 Asset 조회, 35컬럼 메타데이터 추출,
 
 from __future__ import annotations
 
+import io
 import sys
 import time
 from datetime import datetime
 from pathlib import Path
+
+# Fix Windows console encoding
+if sys.platform == "win32":
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).parent.parent.parent
