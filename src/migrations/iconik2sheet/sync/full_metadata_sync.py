@@ -268,8 +268,9 @@ class FullMetadataSync:
 
             if segments:
                 first_segment = segments[0]
-                time_start = first_segment.get("time_base")
-                time_end = first_segment.get("time_end")
+                # API returns time_start_milliseconds, time_end_milliseconds
+                time_start = first_segment.get("time_start_milliseconds")
+                time_end = first_segment.get("time_end_milliseconds")
 
                 if time_start is not None:
                     export_data["time_start_ms"] = time_start
