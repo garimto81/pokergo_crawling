@@ -1,7 +1,7 @@
 # PRD: NAMS Catalog Validator
 
-**Version**: 1.0
-**Date**: 2024-12-19
+**Version**: 1.1
+**Date**: 2025-12-20
 **Status**: Approved
 
 ---
@@ -58,7 +58,7 @@ scripts/
 ### 2.2 데이터 흐름
 
 ```
-[Daily Scan - 매일 03:00]
+[Daily Scan - 매일 08:00]
 Windows Task Scheduler → daily_scan.py
     ├── NAS 드라이브 스캔 (Y:/Z:/X:)
     ├── 새 파일 → DB INSERT + 패턴 매칭
@@ -194,7 +194,7 @@ def main():
 ### 6.2 Task Scheduler 설정
 
 ```
-Trigger: Daily 03:00 AM
+Trigger: Daily 08:00 AM
 Action: python D:\AI\claude01\pokergo_crawling\scripts\daily_scan.py --mode daily
 Working Dir: D:\AI\claude01\pokergo_crawling
 ```

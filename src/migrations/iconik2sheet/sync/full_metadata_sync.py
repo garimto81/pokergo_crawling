@@ -96,11 +96,12 @@ class FullMetadataSync:
         self.state = SyncState()
         self.stats = SyncStats()
 
-    def run(self, skip_sampling: bool = False) -> dict:
+    def run(self, skip_sampling: bool = False, limit: int | None = None) -> dict:
         """Run full metadata sync.
 
         Args:
             skip_sampling: Skip pre-sync sampling check
+            limit: Maximum number of assets to process (None for all)
 
         Returns:
             Sync result summary
@@ -135,7 +136,7 @@ class FullMetadataSync:
                 self._run_sampling(view_id)
 
             # Sync assets with full metadata
-            exports = self._sync_assets_with_metadata(view_id)
+            exports = self._sync_assets_with_metadata(view_id, limit=limit)
             result["assets_processed"] = len(exports)
             result["assets_with_metadata"] = self.stats.metadata_success
             result["assets_with_segments"] = self.stats.segments_success
@@ -214,7 +215,9 @@ class FullMetadataSync:
         except Exception as e:
             print(f"    (Could not fetch views: {e})")
 
-    def _sync_assets_with_metadata(self, view_id: str | None) -> list[dict]:
+    def _sync_assets_with_metadata(
+        self, view_id: str | None, limit: int | None = None
+    ) -> list[dict]:
         """Sync all assets with full metadata and graceful error handling.
 
         Metadata priority:
@@ -223,16 +226,22 @@ class FullMetadataSync:
 
         Args:
             view_id: Metadata view UUID (or None to skip metadata)
+            limit: Maximum number of assets to process (None for all)
 
         Returns:
             List of export data dicts
         """
-        print("\nFetching assets with metadata...")
+        if limit:
+            print(f"\nFetching assets with metadata (limit: {limit})...")
+        else:
+            print("\nFetching assets with metadata...")
         print("  Priority: Segment metadata > Asset metadata")
 
         exports = []
 
-        for asset in self.iconik.get_all_assets():
+        for i, asset in enumerate(self.iconik.get_all_assets()):
+            if limit is not None and i >= limit:
+                break
             self.stats.processed += 1
 
             # Build export data
@@ -241,8 +250,20 @@ class FullMetadataSync:
                 "title": asset.title,
             }
 
-            # Fetch segments first (includes metadata_values - highest priority)
-            segment_metadata = self._fetch_segments(asset.id, export_data)
+            # Subclip: 타임코드가 Asset 자체에 저장됨
+            if asset.type == "SUBCLIP":
+                if asset.time_start_milliseconds is not None:
+                    export_data["time_start_ms"] = asset.time_start_milliseconds
+                    export_data["time_start_S"] = asset.time_start_milliseconds / 1000
+                if asset.time_end_milliseconds is not None:
+                    export_data["time_end_ms"] = asset.time_end_milliseconds
+                    export_data["time_end_S"] = asset.time_end_milliseconds / 1000
+                # Subclip은 Segment가 없으므로 빈 dict 반환
+                segment_metadata = {}
+                self.stats.record_segments_result(asset.id, [], is_subclip=True)
+            else:
+                # 일반 Asset: Segment API에서 타임코드 및 메타데이터 추출
+                segment_metadata = self._fetch_segments(asset.id, export_data)
 
             # Fetch asset-level metadata (fallback for fields not in segment)
             if view_id:
@@ -406,9 +427,10 @@ class FullMetadataSync:
         print(f"  Not found (404): {m['not_found_404']}")
         print(f"  Other errors: {m['other_errors']}")
 
-        print("\n[Segments]")
+        print("\n[Segments/Timecodes]")
         s = report["segments"]
         print(f"  With segments: {s['with_segments']}")
+        print(f"  Subclips (timecode from asset): {s['subclips']}")
         print(f"  Empty: {s['empty']}")
         print(f"  Not found (404): {s['not_found_404']}")
 

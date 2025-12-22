@@ -10,7 +10,6 @@ import {
 import type {
   TreeYear, TreeCategory, TreeEventType, TreeEntry,
 } from '../api/client';
-import type { CategoryEntryDetail } from '../types';
 
 // KPI Bar Component
 function KPIBar({ summary }: { summary: {
@@ -364,7 +363,7 @@ function EntryDetailPanel({ entryId }: { entryId: number }) {
       <div className="border-b pb-4">
         <div className="flex items-center justify-between mb-2">
           <h2 className="text-xl font-bold text-gray-900">{entry.entry_code}</h2>
-          <MatchBadge matchType={entry.match_type} />
+          <MatchBadge matchType={entry.match_type ?? null} />
         </div>
         {entry.display_title && (
           <p className="text-gray-600">{entry.display_title}</p>

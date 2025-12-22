@@ -21,6 +21,12 @@ class IconikAsset(BaseModel):
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
+    # Subclip 관련 필드
+    type: str | None = None  # "ASSET" or "SUBCLIP"
+    time_start_milliseconds: int | None = None  # Subclip 시작 시간
+    time_end_milliseconds: int | None = None  # Subclip 종료 시간
+    original_asset_id: str | None = None  # Parent Asset ID (for subclips)
+
 
 class IconikMetadata(BaseModel):
     """Iconik Metadata model."""
@@ -72,23 +78,23 @@ class IconikSegment(BaseModel):
 
 
 class IconikAssetExport(BaseModel):
-    """26-column export model matching PRD specification.
+    """35-column export model matching GGmetadata_and_timestamps structure.
 
     This model represents the output format for Google Sheets export.
-    Column names match the PRD exactly.
+    Column names match GGmetadata_and_timestamps exactly.
     """
 
-    # Basic info
+    # Basic info (2)
     id: str
     title: str
 
-    # Timecode (from Segments API)
+    # Timecode (4) - from Segments API
     time_start_ms: int | None = None
     time_end_ms: int | None = None
     time_start_S: float | None = None  # Calculated: ms / 1000
     time_end_S: float | None = None  # Calculated: ms / 1000
 
-    # Metadata fields (from Metadata API)
+    # Metadata fields (29) - from Metadata API
     Description: str | None = None
     ProjectName: str | None = None
     ProjectNameTag: str | None = None
@@ -109,3 +115,14 @@ class IconikAssetExport(BaseModel):
     Adjective: str | None = None
     Emotion: str | None = None
     AppearanceOutfit: str | None = None
+
+    # Additional fields (9) - matching GGmetadata_and_timestamps
+    SceneryObject: str | None = None
+    gcvi_tags: str | None = None  # API field: _gcvi_tags (underscore removed for Pydantic)
+    Badbeat: str | None = None
+    Bluff: str | None = None
+    Suckout: str | None = None
+    Cooler: str | None = None
+    RUNOUTTag: str | None = None
+    PostFlop: str | None = None
+    All_in: str | None = None  # Note: 'All-in' renamed to 'All_in' for Python compatibility

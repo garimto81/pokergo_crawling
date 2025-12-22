@@ -1,42 +1,173 @@
 # Iconik 데이터 구조 분석
 
-> Iconik MAM 시스템의 Segment, Subclip, Metadata 구조 분석
+> Iconik MAM 시스템의 Asset, Segment, Subclip 구조 및 타임코드 저장 위치 분석
 
-**Version**: 1.0 | **Date**: 2025-12-22 | **Source**: [Iconik Help Documentation](https://help.iconik.backlight.co)
+**Version**: 2.0 | **Date**: 2025-12-22 | **Source**: [Iconik Help Documentation](https://help.iconik.backlight.co)
 
 ---
 
 ## 1. 개요
 
-Iconik MAM에서 작업자들이 메타데이터를 입력하는 3가지 방식:
+Iconik MAM에서 데이터를 저장하는 3가지 방식:
 
 | 저장 방식 | API 엔드포인트 | 용도 |
 |----------|---------------|------|
-| **Segment Tags** | `/assets/v1/assets/{id}/segments/` | 타임코드 + 메타데이터 (Timed Metadata) |
-| **Subclip** | `/assets/v1/assets/{id}/` (별도 Asset) | Segment에서 파생된 검색 가능한 Asset |
+| **Asset** | `/assets/v1/assets/{id}/` | 미디어 파일 또는 Subclip |
+| **Segment** | `/assets/v1/assets/{id}/segments/` | 타임코드 마커 + 메타데이터 |
 | **General Metadata** | `/metadata/v1/assets/{id}/views/{view_id}/` | Asset 레벨 메타데이터 |
 
 ---
 
-## 2. Segment (Time-based Metadata)
+## 2. 핵심 개념: 타임코드 저장 위치 ★
 
-### 2.1 정의
+> **가장 중요한 발견**: Asset 타임코드와 Segment 타임코드는 **다른 데이터**입니다!
+
+### 2.1 타임코드 저장 위치 비교
+
+| 데이터 소스 | 저장 위치 | 용도 | API |
+|------------|----------|------|-----|
+| **Asset 타임코드** | `asset.time_start_milliseconds` | Subclip의 **실제 구간** (in/out point) | `GET /assets/v1/assets/{id}/` |
+| **Segment 타임코드** | `segment.time_start_milliseconds` | 마커/코멘트 **위치** | `GET /assets/v1/assets/{id}/segments/` |
+
+### 2.2 실제 검증 사례
+
+| Title | Asset 타임코드 | Segment 타임코드 | GG 시트 | 결과 |
+|-------|---------------|-----------------|---------|------|
+| serock vs griff start from flop | 136600~513088 | 347300~347300 (COMMENT) | 136600~513088 | Asset ✓ |
+| Phil Hellmuth Set over Set | 1241725~1446513 | 1241725~1241725 (COMMENT) | 1241725~1446513 | Asset ✓ |
+| hellmuth tilted | 1986920~2230030 | 2038555~2038555 (COMMENT) | 1986920~2230030 | Asset ✓ |
+| Amarillo Slim | 267567~299833 | 267567~267567 (GENERIC) | 267567~299833 | Asset ✓ |
+
+**결론**: GG 시트의 타임코드는 **Asset 필드**와 일치. Segment는 마커/코멘트 위치일 뿐!
+
+### 2.3 올바른 타임코드 조회 로직
+
+```python
+def get_timecode(asset):
+    """Asset 타입에 따른 올바른 타임코드 조회"""
+
+    if asset.type == "SUBCLIP":
+        # Subclip: Asset 자체에서 타임코드 조회
+        return {
+            "start": asset.time_start_milliseconds,
+            "end": asset.time_end_milliseconds
+        }
+    else:
+        # 일반 Asset: Segment API에서 GENERIC 타입 조회
+        segments = client.get_asset_segments(asset.id)
+        generic_segments = [s for s in segments if s["segment_type"] == "GENERIC"]
+        if generic_segments:
+            return {
+                "start": generic_segments[0]["time_start_milliseconds"],
+                "end": generic_segments[0]["time_end_milliseconds"]
+            }
+        return None
+```
+
+---
+
+## 3. Asset Types
+
+### 3.1 타입별 특징
+
+| Asset Type | 설명 | 타임코드 위치 | 파일 |
+|------------|------|--------------|------|
+| **ASSET** | 일반 미디어 파일 | Segment API | 있음 |
+| **SUBCLIP** | Parent Asset에서 파생 | **Asset 자체** | 없음 (참조만) |
+
+### 3.2 SUBCLIP 구조
+
+```
+GET /assets/v1/assets/{subclip_id}/
+
+Response:
+{
+  "id": "8ddb35e6-007e-11f0-8c20-aad6eb65bf32",
+  "type": "SUBCLIP",
+  "title": "serock vs griff start from flop",
+  "time_start_milliseconds": 136600,    // ← 실제 구간 시작
+  "time_end_milliseconds": 513088,      // ← 실제 구간 종료
+  "original_asset_id": "parent-uuid",   // ← Parent Asset
+  "original_segment_id": "segment-uuid" // ← 원본 Segment
+}
+```
+
+### 3.3 주의사항
+
+```python
+# ❌ 잘못된 방법 (Subclip에서 Segment API 호출)
+segments = client.get_asset_segments(subclip_id)
+# → 빈 리스트 또는 COMMENT/MARKER만 반환!
+
+# ✅ 올바른 방법 (Asset 필드에서 직접 조회)
+asset = client.get_asset(subclip_id)
+if asset.type == "SUBCLIP":
+    time_start = asset.time_start_milliseconds
+    time_end = asset.time_end_milliseconds
+```
+
+---
+
+## 4. Segment (Time-based Metadata)
+
+### 4.1 정의
 
 > **Segments are time-coded references to portions of an Asset.**
-> Each segment has a timecode for it's in-point and a timecode for it's out-point.
-> Typically segments are used for **Timed-metadata**, or metadata that lives at a particular point of an asset.
+> Each segment has a timecode for its in-point and out-point.
 
-### 2.2 Segment Types
+### 4.2 Segment Types
 
-| Type | 용도 |
-|------|------|
-| **Generic** | Timed metadata 저장 (작업자가 29개 필드 입력) |
-| Comments | iconik 코멘트 |
-| Markers | 마커 |
-| Quality Control Markers | QC 마커 |
-| Transcription | 자막 |
+| Type | 용도 | 타임코드 특징 | 생성 주체 |
+|------|------|--------------|----------|
+| **GENERIC** | Iconik 기본 템플릿 | 구간 또는 지점 | **시스템 자동** |
+| **COMMENT** | 코멘트/마커 | 특정 지점 (start = end) | 작업자 |
+| **MARKER** | 시각적 마커 | 특정 지점 (start = end) | 작업자 |
+| **QC** | Quality Control 마커 | 특정 지점 | 작업자 |
+| **TRANSCRIPTION** | 자막 | 구간 | 시스템/작업자 |
 
-### 2.3 API 구조
+> **주의**: GENERIC Segment는 **Iconik 기본 템플릿**입니다!
+> - 시스템에서 자동 생성
+> - `metadata_values`가 **항상 비어있음** (검증됨)
+> - 작업자가 직접 만든 것이 아님
+
+### 4.2.1 작업자 메타데이터 저장 위치 ★★
+
+> **핵심 발견**: 작업자 메타데이터는 **Segment가 아닌 Asset Metadata API**에 저장됩니다!
+
+```
+작업자 메타데이터 저장 위치:
+  ❌ Segment.metadata_values (항상 비어있음)
+  ✅ Asset Metadata API: GET /metadata/v1/assets/{id}/views/{view_id}/
+```
+
+| 조회 대상 | API | 메타데이터 |
+|----------|-----|-----------|
+| Subclip | `/metadata/v1/assets/{subclip_id}/views/{view_id}/` | ✅ 있음 |
+| Parent Asset | `/metadata/v1/assets/{parent_id}/views/{view_id}/` | ✅ 있음 |
+| Segment | `segment.metadata_values` | ❌ 비어있음 |
+
+**검증 결과** (serock vs griff):
+```
+Subclip Asset Metadata API:
+  Description: "Serock's amazing hero fold of flop nut straight..."
+  PlayersTags: ["serock", "joseph serock"]
+  EPICHAND: "Quads"
+  HandGrade: "★★★"
+
+Parent Segment (GENERIC):
+  metadata_values: {} (비어있음)
+```
+
+**무작위 10개 샘플 검증** (2025-12-22):
+
+| Type | 샘플 수 | Segment | Segment metadata_values | Asset Metadata |
+|------|--------|---------|------------------------|----------------|
+| SUBCLIP | 8개 | 없음 | - | ✅ 4~11개 필드 |
+| ASSET | 2개 | GENERIC 있음 | **항상 0** | ✅ 또는 None |
+
+→ **100% 검증**: GENERIC Segment의 metadata_values는 항상 비어있음
+
+### 4.3 API 구조
 
 ```
 GET /assets/v1/assets/{asset_id}/segments/
@@ -51,179 +182,184 @@ Response:
       "segment_type": "GENERIC",
       "metadata_values": {
         "Description": {"field_values": [{"value": "Phil Ivey bluffs"}]},
-        "PlayersTags": {"field_values": [{"value": "Phil Ivey"}, {"value": "Daniel Negreanu"}]},
+        "PlayersTags": {"field_values": [{"value": "Phil Ivey"}]},
         ...
       }
+    },
+    {
+      "id": "comment-uuid",
+      "time_start_milliseconds": 347300,
+      "time_end_milliseconds": 347300,      // ← 동일 (point marker)
+      "segment_type": "COMMENT",            // ← COMMENT 타입
+      "metadata_values": {}
     }
   ]
 }
 ```
 
-### 2.4 핵심 필드
+### 4.4 핵심 필드
 
 | 필드 | 타입 | 설명 |
 |------|------|------|
 | `time_start_milliseconds` | Integer | 시작 시간 (밀리초) |
 | `time_end_milliseconds` | Integer | 종료 시간 (밀리초) |
-| `segment_type` | String | GENERIC, MARKER, QC, COMMENT 등 |
-| `metadata_values` | Object | 29개 메타데이터 필드 (Generic 타입) |
+| `segment_type` | String | GENERIC, MARKER, COMMENT 등 |
+| `metadata_values` | Object | 메타데이터 필드 (GENERIC 타입) |
 
 ---
 
-## 3. Subclip (별도 Asset)
+## 5. Subclip (별도 Asset)
 
-### 3.1 정의
+### 5.1 정의
 
-> **Subclips are a special type of asset** that is derived from the time-based metadata segment of another asset of a particular version.
+> **Subclips are a special type of asset** derived from a time-based metadata segment of another asset.
 
-### 3.2 메타데이터 동기화
+### 5.2 Subclip ↔ Parent Segment 관계
 
-> **The metadata on Subclips are directly related to the time-based metadata and all metadata on the Subclip is cloned to the related time-based metadata segment on the parent asset.**
+> **The metadata on Subclips are directly related to the time-based metadata and all metadata on the Subclip is cloned to the related segment on the parent asset.**
 
-**핵심**: Subclip ↔ Parent Segment 간 **양방향 동기화**
+- Subclip 메타데이터 변경 → Parent Segment에 반영
+- Parent Segment 메타데이터 변경 → Subclip에 반영
+- **양방향 동기화**
 
-### 3.3 Subclip 특징
+### 5.3 Subclip 특징
 
 | 항목 | 설명 |
 |------|------|
 | 유형 | Parent Asset의 Segment에서 파생된 **별도 Asset** |
-| 파일 | 일반적으로 파일 없음 (API로 제공 가능) |
+| 파일 | 없음 (Parent Asset 참조) |
 | 검색 | 독립적으로 검색 가능 (별도 인덱싱) |
-| 메타데이터 | Parent Segment와 양방향 동기화 |
+| 타임코드 | **Asset 필드**에 저장 (Segment API 아님!) |
 
-### 3.4 Subclip Sub-entities
-
-Subclip에 저장 가능한 정보:
-- Access Control
-- Approval Status
-- Formats
-- History
-- Posters
-- Relationships (다른 Asset/Subclip과의 관계)
-- Segments (단, Subclip의 Segment는 다시 Subclip 불가)
-- Shares
-
-### 3.5 Parent Asset 작업 영향
+### 5.4 Parent Asset 삭제 시 영향
 
 | Parent 작업 | Subclip 영향 |
 |------------|-------------|
-| Time-based metadata 삭제 | 관련 Subclip **삭제** |
+| Segment 삭제 | 관련 Subclip **삭제** |
 | Asset 버전 삭제 | 해당 버전의 Subclip **삭제** |
 | Asset 삭제 | 모든 Subclip **삭제** |
 
 ---
 
-## 4. 데이터 흐름
+## 6. 데이터 흐름도
 
-### 4.1 구조도
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                      Parent Asset                               │
-│                                                                 │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │ Segment (Generic Type = Timed Metadata)                  │   │
-│  │                                                          │   │
-│  │  • time_start_milliseconds                               │   │
-│  │  • time_end_milliseconds                                 │   │
-│  │  • segment_type: "GENERIC"                               │   │
-│  │  • metadata_values: { 29개 필드 }                        │   │
-│  │                                                          │   │
-│  └──────────────────────┬───────────────────────────────────┘   │
-│                         │                                       │
-│                         │ 클론 (양방향 동기화)                  │
-│                         ▼                                       │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │ Subclip (별도 Asset)                                     │   │
-│  │                                                          │   │
-│  │  • 독립적인 asset_id                                     │   │
-│  │  • 검색 가능 (별도 인덱싱)                               │   │
-│  │  • 파일/포맷 없음 (API로 제공 가능)                      │   │
-│  │  • metadata_values: { Parent Segment와 동기화 }          │   │
-│  │                                                          │   │
-│  └─────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-### 4.2 작업자 워크플로우
+### 6.1 구조도
 
 ```
-작업자가 Iconik UI에서:
+┌─────────────────────────────────────────────────────────────────────┐
+│                         Parent Asset (ASSET)                         │
+│                                                                      │
+│  ┌────────────────────────────────────────────────────────────────┐ │
+│  │ Segment (GENERIC) - Timed Metadata                              │ │
+│  │                                                                 │ │
+│  │  • time_start_milliseconds: 136600                              │ │
+│  │  • time_end_milliseconds: 513088                                │ │
+│  │  • segment_type: "GENERIC"                                      │ │
+│  │  • metadata_values: { Description, PlayersTags, ... }           │ │
+│  └───────────────────────────┬────────────────────────────────────┘ │
+│                              │                                       │
+│                              │ 파생 (양방향 동기화)                  │
+│                              ▼                                       │
+│  ┌────────────────────────────────────────────────────────────────┐ │
+│  │ Subclip (SUBCLIP) - 별도 Asset                                  │ │
+│  │                                                                 │ │
+│  │  • id: "8ddb35e6-007e-11f0-8c20-aad6eb65bf32"                   │ │
+│  │  • type: "SUBCLIP"                                              │ │
+│  │  • time_start_milliseconds: 136600  ← Asset 필드!               │ │
+│  │  • time_end_milliseconds: 513088    ← Asset 필드!               │ │
+│  │  • 검색 가능 (별도 인덱싱)                                      │ │
+│  │                                                                 │ │
+│  │  ┌──────────────────────────────────────────────────────────┐  │ │
+│  │  │ Segment (COMMENT) - 마커/코멘트                           │  │ │
+│  │  │                                                          │  │ │
+│  │  │  • time_start_milliseconds: 347300  ← 마커 위치!         │  │ │
+│  │  │  • time_end_milliseconds: 347300                         │  │ │
+│  │  │  • segment_type: "COMMENT"                               │  │ │
+│  │  └──────────────────────────────────────────────────────────┘  │ │
+│  └────────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────┘
+```
 
-1) Segment Panel에서 타임코드 설정 (in/out point)
+### 6.2 작업자 워크플로우
+
+```
+1) Parent Asset에서 타임코드 구간 설정 (in/out point)
       ↓
-2) Generic Segment에 29개 메타데이터 필드 입력
+2) Generic Segment 생성 + 메타데이터 입력
       ↓
 3) Subclip 생성 (선택적)
       ↓
-4) 메타데이터 저장 위치:
-   ├── Parent Asset의 Segment (metadata_values)
-   └── Subclip (클론된 metadata_values)
+4) 결과:
+   ├── Parent Asset: Segment에 타임코드 + 메타데이터
+   └── Subclip: Asset 필드에 타임코드, 메타데이터는 Segment와 동기화
       ↓
-5) 이후 변경 시 양방향 동기화
+5) Subclip에 코멘트/마커 추가 가능 (COMMENT Segment)
 ```
 
 ---
 
-## 5. 현재 시스템과의 Gap
-
-### 5.1 현재 코드 동작
-
-**파일**: `src/migrations/iconik2sheet/sync/full_metadata_sync.py:260-292`
-
-```python
-def _fetch_segments(asset_id, export_data):
-    segments = iconik.get_asset_segments(asset_id)
-    if segments:
-        first_segment = segments[0]
-        # 현재: 타임코드만 추출 ❌
-        export_data["time_start_ms"] = first_segment.get("time_start_milliseconds")
-        export_data["time_end_ms"] = first_segment.get("time_end_milliseconds")
-        # metadata_values 추출 누락 ❌
-```
-
-### 5.2 Gap 분석
-
-| 항목 | 현재 코드 | 실제 iconik 구조 |
-|------|----------|-----------------|
-| Segment 데이터 | 타임코드만 추출 | **타임코드 + metadata_values** |
-| 메타데이터 위치 | Asset 레벨만 처리 | **Segment 레벨에 저장** |
-| Subclip | 처리 안함 | 별도 Asset (Parent Segment와 동기화) |
-
-### 5.3 필요한 수정
-
-```python
-def _fetch_segments(asset_id, export_data):
-    segments = iconik.get_asset_segments(asset_id)
-    if segments:
-        first_segment = segments[0]
-
-        # 타임코드
-        export_data["time_start_ms"] = first_segment.get("time_start_milliseconds")
-        export_data["time_end_ms"] = first_segment.get("time_end_milliseconds")
-
-        # 메타데이터 (Generic Segment에서 추출) ✅
-        metadata_values = first_segment.get("metadata_values", {})
-        for field_name, field_data in metadata_values.items():
-            export_data[field_name] = extract_field_values(field_data)
-```
-
----
-
-## 6. API 엔드포인트 요약
+## 7. API 엔드포인트 요약
 
 | 작업 | Method | Endpoint |
 |------|--------|----------|
-| Segment 조회 | GET | `/assets/v1/assets/{id}/segments/` |
-| Segment 생성 | POST | `/assets/v1/assets/{id}/segments/` |
-| Segment 업데이트 | PUT | `/assets/v1/assets/{id}/segments/{seg_id}/` |
-| Asset 메타데이터 조회 | GET | `/metadata/v1/assets/{id}/views/{view_id}/` |
-| Asset 메타데이터 업데이트 | PUT | `/metadata/v1/assets/{id}/views/{view_id}/` |
-| Subclip 조회 | GET | `/assets/v1/assets/{subclip_id}/` |
+| **Asset 조회** | GET | `/assets/v1/assets/{id}/` |
+| **Segment 목록** | GET | `/assets/v1/assets/{id}/segments/` |
+| **Segment 생성** | POST | `/assets/v1/assets/{id}/segments/` |
+| **Segment 수정** | PUT | `/assets/v1/assets/{id}/segments/{seg_id}/` |
+| **메타데이터 조회** | GET | `/metadata/v1/assets/{id}/views/{view_id}/` |
+| **메타데이터 수정** | PUT | `/metadata/v1/assets/{id}/views/{view_id}/` |
 
 ---
 
-## 7. 참고 자료
+## 8. 검증된 Asset ID 목록
+
+| Title | Iconik Asset ID | Type |
+|-------|----------------|------|
+| serock vs griff start from flop | `8ddb35e6-007e-11f0-8c20-aad6eb65bf32` | SUBCLIP |
+| Phil Hellmuth Set over Set | `712e6a98-5ca5-11f0-bc74-aa6aabd2c9a2` | SUBCLIP |
+| hellmuth tilted | `32725c7e-5caa-11f0-8166-ce6143467bb9` | SUBCLIP |
+| Amarillo Slim | `b88deba2-63a3-11f0-967e-820d87a649a9` | SUBCLIP |
+
+**Iconik 직접 링크**: `https://app.iconik.io/asset/{asset_id}`
+
+---
+
+## 9. 현재 시스템 Gap
+
+### 9.1 analyze_full_gap.py 버그
+
+**문제**: Segment API만 확인하고 Subclip의 Asset 타임코드를 무시
+
+```python
+# 현재 코드 (버그)
+segments = client.get_asset_segments(asset.id, raise_for_404=False)
+if segments:
+    time_start = segments[0].get("time_start_milliseconds")
+    # → COMMENT 마커 위치를 가져옴! (347300)
+
+# 올바른 코드
+if asset.type == "SUBCLIP":
+    time_start = asset.time_start_milliseconds  # ← 136600 (실제 구간)
+else:
+    segments = client.get_asset_segments(asset.id)
+    generic = [s for s in segments if s["segment_type"] == "GENERIC"]
+    time_start = generic[0]["time_start_milliseconds"] if generic else None
+```
+
+**영향**:
+- 994건 "Reverse Sync 필요" → 실제로는 정상일 수 있음
+- 14건 "충돌" → 실제로는 일치할 수 있음
+
+### 9.2 수정 필요 파일
+
+| 파일 | 수정 내용 |
+|------|----------|
+| `scripts/analyze_full_gap.py` | Subclip Asset 타임코드 조회 로직 추가 |
+| `sync/full_metadata_sync.py` | Segment metadata_values 추출 로직 |
+
+---
+
+## 10. 참고 자료
 
 - [Subclips – iconik](https://help.iconik.backlight.co/hc/en-us/articles/25304106435863-Subclips)
 - [Segments Entities – iconik](https://help.iconik.backlight.co/hc/en-us/articles/25304074513815-Segments-Entities)

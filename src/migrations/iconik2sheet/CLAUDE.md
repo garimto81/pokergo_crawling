@@ -19,7 +19,9 @@ cp .env.example .env
 python -m scripts.test_connection    # 연결 테스트
 python -m scripts.run_full_sync      # 전체 동기화 (기본 정보 7컬럼)
 python -m scripts.run_full_metadata  # 전체 메타데이터 (35컬럼) ★
+python -m scripts.run_full_metadata --limit 10  # 10개만 테스트
 python -m scripts.run_incremental    # 증분 동기화
+python -m scripts.analyze_full_gap   # GG 시트 vs Iconik 갭 분석
 
 # 린트/테스트
 ruff check . --fix
@@ -70,8 +72,11 @@ with IconikClient() as client:
 - `health_check()` - 연결 테스트
 
 **Iconik 데이터 구조** (상세: `docs/etc/ICONIK_DATA_STRUCTURE.md`):
-- **Segment** = 타임코드 + 메타데이터 (Generic 타입이 메타데이터 저장용)
-- **Subclip** = Parent Segment에서 파생된 별도 Asset (양방향 동기화)
+- **Asset (type=ASSET)**: 타임코드는 Segment API에서 조회
+- **Subclip (type=SUBCLIP)**: 타임코드는 **Asset 자체**에 저장됨 ★
+  - `time_start_milliseconds`, `time_end_milliseconds` 필드
+  - `original_asset_id`: Parent Asset ID
+  - Segment API는 빈 리스트 반환
 
 **Graceful 404 Handling** (v1.1+):
 ```python
@@ -107,23 +112,33 @@ result = sync.run()  # 전체 동기화 실행
 
 ```python
 sync = FullMetadataSync()
-result = sync.run(skip_sampling=False)  # 35컬럼 메타데이터 동기화
+result = sync.run(skip_sampling=False, limit=10)  # 10개만 테스트
+result = sync.run()  # 전체 동기화
 ```
 
 **주요 기능**:
+- **Subclip 타임코드 처리**: Asset 자체에서 타임코드 추출 ★
 - **샘플링**: 10개 Asset으로 메타데이터 가용성 확인
 - **Graceful 404**: 메타데이터 없는 Asset도 계속 처리
 - **통계 리포트**: 성공/404/에러 카운트, 필드 커버리지
 
+**타임코드 추출 로직**:
+```python
+if asset.type == "SUBCLIP":
+    # Subclip: Asset 자체에서 타임코드
+    time_start = asset.time_start_milliseconds
+    time_end = asset.time_end_milliseconds
+else:
+    # 일반 Asset: Segment API에서 타임코드
+    segments = client.get_asset_segments(asset.id)
+```
+
 **출력 예시**:
 ```
-[Metadata]
-  Success: 2,427 (85.5%)
-  Not found (404): 413
-
-[Field Coverage]
-  Source: 92.3%
-  Description: 80.6%
+[Segments/Timecodes]
+  With segments: 7
+  Subclips (timecode from asset): 3
+  Empty: 0
 ```
 
 ### SyncStats (`sync/stats.py`)

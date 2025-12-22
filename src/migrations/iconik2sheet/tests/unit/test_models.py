@@ -174,14 +174,14 @@ class TestIconikSegment:
 
 
 class TestIconikAssetExport:
-    """Test IconikAssetExport 26-column model."""
+    """Test IconikAssetExport 35-column model."""
 
-    def test_all_26_columns_present(self):
-        """Test model has exactly 26 fields."""
+    def test_all_35_columns_present(self):
+        """Test model has exactly 35 fields."""
         from iconik.models import IconikAssetExport
 
         field_count = len(IconikAssetExport.model_fields)
-        assert field_count == 26, f"Expected 26 fields, got {field_count}"
+        assert field_count == 35, f"Expected 35 fields, got {field_count}"
 
     def test_required_fields(self):
         """Test only id and title are required."""
@@ -242,16 +242,19 @@ class TestIconikAssetExport:
         assert export.EPICHAND is None
 
     def test_column_names_match_prd(self):
-        """Test column names match PRD specification."""
+        """Test column names match PRD specification (35 columns)."""
         from iconik.models import IconikAssetExport
 
         expected_columns = [
+            # Basic info (2)
             "id",
             "title",
+            # Timecode (4)
             "time_start_ms",
             "time_end_ms",
             "time_start_S",
             "time_end_S",
+            # Metadata fields (20)
             "Description",
             "ProjectName",
             "ProjectNameTag",
@@ -272,6 +275,16 @@ class TestIconikAssetExport:
             "Adjective",
             "Emotion",
             "AppearanceOutfit",
+            # Additional fields (9)
+            "SceneryObject",
+            "gcvi_tags",  # API uses _gcvi_tags, model uses gcvi_tags
+            "Badbeat",
+            "Bluff",
+            "Suckout",
+            "Cooler",
+            "RUNOUTTag",
+            "PostFlop",
+            "All_in",
         ]
 
         actual_columns = list(IconikAssetExport.model_fields.keys())
