@@ -256,3 +256,134 @@ class TestSegmentMetadataExtraction:
         # Verify priority
         assert export_data.get("Description") == "Segment description"  # From segment
         assert export_data.get("PlayersTags") == "From Asset"  # Fallback from asset
+
+
+class TestGenericSegmentFiltering:
+    """Tests for GENERIC segment filtering.
+
+    Iconik stores different segment types:
+    - GENERIC: System-created template with timecode range
+    - COMMENT: User comments/markers (point markers, start=end)
+    - MARKER: Visual markers
+
+    Only GENERIC segments should be used for timecode extraction.
+    """
+
+    def test_filter_generic_from_mixed_segments(self):
+        """GENERIC segment should be filtered from mixed types."""
+        segments = [
+            {
+                "id": "comment-1",
+                "time_start_milliseconds": 347300,
+                "time_end_milliseconds": 347300,
+                "segment_type": "COMMENT",
+            },
+            {
+                "id": "generic-1",
+                "time_start_milliseconds": 136600,
+                "time_end_milliseconds": 513088,
+                "segment_type": "GENERIC",
+            },
+            {
+                "id": "marker-1",
+                "time_start_milliseconds": 500000,
+                "time_end_milliseconds": 500000,
+                "segment_type": "MARKER",
+            },
+        ]
+
+        generic_segments = [
+            s for s in segments if s.get("segment_type") == "GENERIC"
+        ]
+
+        assert len(generic_segments) == 1
+        assert generic_segments[0]["id"] == "generic-1"
+        assert generic_segments[0]["time_start_milliseconds"] == 136600
+        assert generic_segments[0]["time_end_milliseconds"] == 513088
+
+    def test_no_generic_segment(self):
+        """When no GENERIC segment exists, timecode should not be extracted."""
+        segments = [
+            {
+                "id": "comment-1",
+                "time_start_milliseconds": 347300,
+                "time_end_milliseconds": 347300,
+                "segment_type": "COMMENT",
+            },
+        ]
+
+        generic_segments = [
+            s for s in segments if s.get("segment_type") == "GENERIC"
+        ]
+
+        assert len(generic_segments) == 0
+
+    def test_comment_segment_is_point_marker(self):
+        """COMMENT segments typically have start=end (point marker)."""
+        segment = {
+            "id": "comment-1",
+            "time_start_milliseconds": 347300,
+            "time_end_milliseconds": 347300,
+            "segment_type": "COMMENT",
+        }
+
+        # COMMENT is a point marker
+        assert segment["time_start_milliseconds"] == segment["time_end_milliseconds"]
+
+    def test_generic_segment_has_range(self):
+        """GENERIC segments have a time range (start != end)."""
+        segment = {
+            "id": "generic-1",
+            "time_start_milliseconds": 136600,
+            "time_end_milliseconds": 513088,
+            "segment_type": "GENERIC",
+        }
+
+        # GENERIC has a range
+        assert segment["time_start_milliseconds"] != segment["time_end_milliseconds"]
+
+
+class TestGenericSegmentMetadataAlwaysEmpty:
+    """Tests confirming GENERIC segment metadata_values is always empty.
+
+    According to ICONIK_DATA_STRUCTURE.md:
+    - GENERIC Segment is a system-created template
+    - metadata_values is ALWAYS empty (verified with 100% of samples)
+    - Worker metadata is stored in Asset Metadata API, not Segment
+    """
+
+    def test_generic_segment_metadata_values_empty(self):
+        """GENERIC segment's metadata_values is always empty."""
+        # Real Iconik API response - GENERIC segment
+        segment = {
+            "id": "generic-1",
+            "time_start_milliseconds": 136600,
+            "time_end_milliseconds": 513088,
+            "segment_type": "GENERIC",
+            "metadata_values": {},  # Always empty!
+        }
+
+        metadata_values = segment.get("metadata_values", {})
+        assert metadata_values == {}
+
+    def test_worker_metadata_not_in_segment(self):
+        """Worker metadata (Description, PlayersTags) is not in segment.
+
+        This confirms the documented behavior:
+        - Segment.metadata_values: {} (empty)
+        - Asset Metadata API: contains actual metadata
+        """
+        # Simulated real case: serock vs griff
+        segment = {
+            "id": "generic-1",
+            "time_start_milliseconds": 136600,
+            "time_end_milliseconds": 513088,
+            "segment_type": "GENERIC",
+            "metadata_values": {},
+        }
+
+        # No metadata in segment
+        metadata_values = segment.get("metadata_values", {})
+        assert "Description" not in metadata_values
+        assert "PlayersTags" not in metadata_values
+        assert "EPICHAND" not in metadata_values

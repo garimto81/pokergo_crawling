@@ -258,21 +258,15 @@ class FullMetadataSync:
                 if asset.time_end_milliseconds is not None:
                     export_data["time_end_ms"] = asset.time_end_milliseconds
                     export_data["time_end_S"] = asset.time_end_milliseconds / 1000
-                # Subclip은 Segment가 없으므로 빈 dict 반환
-                segment_metadata = {}
                 self.stats.record_segments_result(asset.id, [], is_subclip=True)
             else:
-                # 일반 Asset: Segment API에서 타임코드 및 메타데이터 추출
-                segment_metadata = self._fetch_segments(asset.id, export_data)
+                # 일반 Asset: Segment API에서 타임코드 추출 (GENERIC만)
+                self._fetch_segments(asset.id, export_data)
 
-            # Fetch asset-level metadata (fallback for fields not in segment)
+            # Fetch metadata from Asset Metadata API (primary source)
+            # Note: Segment.metadata_values is always empty, so no skip_fields needed
             if view_id:
-                self._fetch_metadata(
-                    asset.id,
-                    view_id,
-                    export_data,
-                    skip_fields=set(segment_metadata.keys()),
-                )
+                self._fetch_metadata(asset.id, view_id, export_data)
 
             exports.append(export_data)
 
@@ -288,49 +282,45 @@ class FullMetadataSync:
 
         return exports
 
-    def _fetch_segments(self, asset_id: str, export_data: dict) -> dict:
+    def _fetch_segments(self, asset_id: str, export_data: dict) -> None:
         """Fetch segments with graceful 404 handling.
 
-        Extracts both timecode and metadata_values from segments.
-        Segment metadata takes priority over Asset-level metadata.
+        Extracts timecode from GENERIC segment only.
+        Note: GENERIC segment's metadata_values is always empty (verified).
+        Worker metadata is stored in Asset Metadata API, not Segment.
 
         Args:
             asset_id: Asset UUID
-            export_data: Dict to populate with segment data
-
-        Returns:
-            Dict of extracted segment metadata fields (for priority handling)
+            export_data: Dict to populate with segment timecode data
         """
-        segment_metadata = {}
-
         try:
             segments = self.iconik.get_asset_segments(asset_id, raise_for_404=False)
 
             if segments:
-                first_segment = segments[0]
+                # Filter GENERIC segments only for timecode extraction
+                # COMMENT/MARKER segments are point markers (start=end), not ranges
+                generic_segments = [
+                    s for s in segments if s.get("segment_type") == "GENERIC"
+                ]
 
-                # Extract timecodes
-                time_start = first_segment.get("time_start_milliseconds")
-                time_end = first_segment.get("time_end_milliseconds")
+                if generic_segments:
+                    first_generic = generic_segments[0]
 
-                if time_start is not None:
-                    export_data["time_start_ms"] = time_start
-                    export_data["time_start_S"] = time_start / 1000
+                    # Extract timecodes from GENERIC segment
+                    time_start = first_generic.get("time_start_milliseconds")
+                    time_end = first_generic.get("time_end_milliseconds")
 
-                if time_end is not None:
-                    export_data["time_end_ms"] = time_end
-                    export_data["time_end_S"] = time_end / 1000
+                    if time_start is not None:
+                        export_data["time_start_ms"] = time_start
+                        export_data["time_start_S"] = time_start / 1000
 
-                # Extract metadata_values from segment (Timed Metadata)
-                # This is where workers input metadata via Segment Panel
-                metadata_values = first_segment.get("metadata_values", {})
-                if metadata_values:
-                    for api_field, model_field in METADATA_FIELD_MAP.items():
-                        field_data = metadata_values.get(api_field)
-                        value = extract_field_values(field_data)
-                        if value is not None:
-                            export_data[model_field] = value
-                            segment_metadata[model_field] = value
+                    if time_end is not None:
+                        export_data["time_end_ms"] = time_end
+                        export_data["time_end_S"] = time_end / 1000
+
+                # Note: metadata_values extraction removed
+                # GENERIC segment's metadata_values is ALWAYS empty (verified)
+                # Worker metadata is stored in Asset Metadata API
 
                 self.stats.record_segments_result(asset_id, segments)
             else:
@@ -342,28 +332,23 @@ class FullMetadataSync:
             # Log but continue - segments are optional
             self.stats.record_segments_result(asset_id, [])
 
-        return segment_metadata
-
     def _fetch_metadata(
         self,
         asset_id: str,
         view_id: str,
         export_data: dict,
-        skip_fields: set[str] | None = None,
     ) -> None:
-        """Fetch metadata with graceful 404 handling.
+        """Fetch metadata from Asset Metadata API.
 
-        Asset-level metadata is used as fallback for fields not found in segments.
-        If skip_fields is provided, those fields will not be overwritten.
+        This is the PRIMARY source of worker metadata.
+        Note: Segment.metadata_values is always empty (verified), so
+        Asset Metadata API is the only source.
 
         Args:
             asset_id: Asset UUID
             view_id: Metadata view UUID
             export_data: Dict to populate with metadata fields
-            skip_fields: Set of field names already populated from segments (priority)
         """
-        skip_fields = skip_fields or set()
-
         try:
             metadata = self.iconik.get_asset_metadata(
                 asset_id, view_id, raise_for_404=False
@@ -377,10 +362,6 @@ class FullMetadataSync:
             extracted_fields = {}
 
             for api_field, model_field in METADATA_FIELD_MAP.items():
-                # Skip fields already populated from segment metadata
-                if model_field in skip_fields:
-                    continue
-
                 field_data = metadata_values.get(api_field)
                 # API 응답 구조: {"field_values": [{"value": "..."}, ...]}
                 # 다중 값 필드 처리 (PlayersTags, PokerPlayTags 등)
@@ -726,39 +707,37 @@ class IncrementalMetadataSync(FullMetadataSync):
             # Collect raw data for checksum
             segments_raw = []
             metadata_raw = {}
-            segment_metadata_fields = set()  # Track fields from segment
 
-            # Fetch segments first (highest priority for metadata)
+            # Fetch segments for timecode (GENERIC only)
             try:
                 segments = self.iconik.get_asset_segments(asset.id, raise_for_404=False)
                 if segments:
                     segments_raw = segments
-                    first_segment = segments[0]
+                    # Filter GENERIC segments only
+                    generic_segments = [
+                        s for s in segments if s.get("segment_type") == "GENERIC"
+                    ]
 
-                    # Extract timecodes
-                    time_start = first_segment.get("time_start_milliseconds")
-                    time_end = first_segment.get("time_end_milliseconds")
+                    if generic_segments:
+                        first_generic = generic_segments[0]
 
-                    if time_start is not None:
-                        export_data["time_start_ms"] = time_start
-                        export_data["time_start_S"] = time_start / 1000
-                    if time_end is not None:
-                        export_data["time_end_ms"] = time_end
-                        export_data["time_end_S"] = time_end / 1000
+                        # Extract timecodes from GENERIC segment
+                        time_start = first_generic.get("time_start_milliseconds")
+                        time_end = first_generic.get("time_end_milliseconds")
 
-                    # Extract segment metadata_values (Timed Metadata)
-                    segment_metadata = first_segment.get("metadata_values", {})
-                    if segment_metadata:
-                        for api_field, model_field in METADATA_FIELD_MAP.items():
-                            field_data = segment_metadata.get(api_field)
-                            value = extract_field_values(field_data)
-                            if value is not None:
-                                export_data[model_field] = value
-                                segment_metadata_fields.add(model_field)
+                        if time_start is not None:
+                            export_data["time_start_ms"] = time_start
+                            export_data["time_start_S"] = time_start / 1000
+                        if time_end is not None:
+                            export_data["time_end_ms"] = time_end
+                            export_data["time_end_S"] = time_end / 1000
+
+                    # Note: segment_metadata extraction removed
+                    # GENERIC segment's metadata_values is ALWAYS empty
             except Exception:
                 pass
 
-            # Fetch asset-level metadata (fallback for missing fields)
+            # Fetch metadata from Asset Metadata API (primary source)
             if view_id:
                 try:
                     metadata = self.iconik.get_asset_metadata(
@@ -767,9 +746,6 @@ class IncrementalMetadataSync(FullMetadataSync):
                     if metadata:
                         metadata_raw = metadata.get("metadata_values", {})
                         for api_field, model_field in METADATA_FIELD_MAP.items():
-                            # Skip fields already from segment
-                            if model_field in segment_metadata_fields:
-                                continue
                             field_data = metadata_raw.get(api_field)
                             value = extract_field_values(field_data)
                             if value is not None:

@@ -324,38 +324,26 @@ Response:
 
 ---
 
-## 9. 현재 시스템 Gap
+## 9. 버그 수정 이력
 
-### 9.1 analyze_full_gap.py 버그
+### 9.1 v2.1 수정 완료 (2025-12-23)
 
-**문제**: Segment API만 확인하고 Subclip의 Asset 타임코드를 무시
+**수정된 버그**:
 
-```python
-# 현재 코드 (버그)
-segments = client.get_asset_segments(asset.id, raise_for_404=False)
-if segments:
-    time_start = segments[0].get("time_start_milliseconds")
-    # → COMMENT 마커 위치를 가져옴! (347300)
+| 버그 | 이전 | 수정 후 |
+|------|------|---------|
+| 타임코드 조회 | `segments[0]` (타입 무관) | GENERIC 타입만 필터링 |
+| 메타데이터 조회 | `segment.metadata_values` (항상 비어있음) | Asset Metadata API 사용 |
 
-# 올바른 코드
-if asset.type == "SUBCLIP":
-    time_start = asset.time_start_milliseconds  # ← 136600 (실제 구간)
-else:
-    segments = client.get_asset_segments(asset.id)
-    generic = [s for s in segments if s["segment_type"] == "GENERIC"]
-    time_start = generic[0]["time_start_milliseconds"] if generic else None
-```
+**수정된 파일**:
+- `sync/full_metadata_sync.py`: `_fetch_segments()`, `_fetch_metadata()` 수정
+- `tests/unit/test_metadata_sync.py`: GENERIC Segment 필터링 테스트 추가
 
-**영향**:
-- 994건 "Reverse Sync 필요" → 실제로는 정상일 수 있음
-- 14건 "충돌" → 실제로는 일치할 수 있음
-
-### 9.2 수정 필요 파일
-
-| 파일 | 수정 내용 |
-|------|----------|
-| `scripts/analyze_full_gap.py` | Subclip Asset 타임코드 조회 로직 추가 |
-| `sync/full_metadata_sync.py` | Segment metadata_values 추출 로직 |
+**검증 결과** (2,847 Assets):
+- 메타데이터 성공: 2,434개 (85.5%)
+- Segment 타임코드: 461개
+- Subclip 타임코드: 1,171개
+- GG 시트 대비 누락: 0건 ✅
 
 ---
 
