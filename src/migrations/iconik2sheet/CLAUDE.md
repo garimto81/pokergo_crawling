@@ -65,9 +65,9 @@ with IconikClient() as client:
 - `get_assets_page(page)` / `get_all_assets()` - 페이지네이션 지원
 - `get_asset(asset_id)` - 단일 Asset 조회
 - `get_asset_metadata(asset_id, view_id, raise_for_404=True)` - 메타데이터
-- `get_asset_segments(asset_id, raise_for_404=True)` - 세그먼트 (timecode + **metadata_values**)
-  - **현재**: 타임코드만 추출
-  - **필요**: metadata_values 필드도 추출 필요 (Segment에 메타데이터 저장됨)
+- `get_asset_segments(asset_id, raise_for_404=True)` - 세그먼트 (타임코드)
+  - **GENERIC 타입만** 타임코드 추출 (COMMENT/MARKER 제외)
+  - `segment.metadata_values`는 항상 비어있음 → Asset Metadata API 사용
 - `get_collections_page(page)` / `get_all_collections()` - 컬렉션
 - `health_check()` - 연결 테스트
 
@@ -122,16 +122,21 @@ result = sync.run()  # 전체 동기화
 - **Graceful 404**: 메타데이터 없는 Asset도 계속 처리
 - **통계 리포트**: 성공/404/에러 카운트, 필드 커버리지
 
-**타임코드 추출 로직**:
+**타임코드 추출 로직** (v2.1):
 ```python
 if asset.type == "SUBCLIP":
     # Subclip: Asset 자체에서 타임코드
     time_start = asset.time_start_milliseconds
     time_end = asset.time_end_milliseconds
 else:
-    # 일반 Asset: Segment API에서 타임코드
+    # 일반 Asset: GENERIC Segment에서만 타임코드
     segments = client.get_asset_segments(asset.id)
+    generic = [s for s in segments if s.get("segment_type") == "GENERIC"]
+    if generic:
+        time_start = generic[0].get("time_start_milliseconds")
 ```
+
+**메타데이터 추출**: Asset Metadata API 사용 (`/metadata/v1/assets/{id}/views/{view_id}/`)
 
 **출력 예시**:
 ```
