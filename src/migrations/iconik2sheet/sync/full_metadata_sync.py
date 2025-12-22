@@ -402,12 +402,149 @@ class IncrementalMetadataSync(FullMetadataSync):
         # Check if full sync is needed
         if force_full or self.state.should_force_full_sync():
             print("Running FULL sync (first run or 7+ days since last full sync)")
-            result = super().run(skip_sampling=skip_sampling)
+            result = self._run_full_with_checksums(skip_sampling)
             self.state.mark_full_sync_complete()
             return result
 
         # Run incremental sync
         return self._run_incremental(skip_sampling)
+
+    def _run_full_with_checksums(self, skip_sampling: bool = True) -> dict:
+        """Run full sync and save checksums for future incremental syncs.
+
+        Args:
+            skip_sampling: Skip pre-sync sampling
+
+        Returns:
+            Sync result summary
+        """
+        sync_id = str(uuid.uuid4())[:8]
+        started_at = datetime.now()
+
+        print(f"Starting full metadata sync with checksum tracking (ID: {sync_id})")
+
+        result = {
+            "sync_id": sync_id,
+            "sync_type": "full_metadata",
+            "started_at": started_at,
+            "completed_at": None,
+            "assets_processed": 0,
+            "assets_with_metadata": 0,
+            "assets_with_segments": 0,
+            "checksums_saved": 0,
+            "status": "running",
+        }
+
+        try:
+            settings = get_settings()
+            view_id = settings.iconik.metadata_view_id if settings.iconik else None
+
+            if not view_id:
+                print("Warning: ICONIK_METADATA_VIEW_ID not set")
+
+            # Sync assets and collect checksums
+            exports, checksum_count = self._sync_assets_with_checksums(view_id)
+
+            result["assets_processed"] = len(exports)
+            result["assets_with_metadata"] = self.stats.metadata_success
+            result["assets_with_segments"] = self.stats.segments_success
+            result["checksums_saved"] = checksum_count
+
+            # Update state
+            self.state.save()
+            self.state.mark_sync_complete(
+                sync_type="full_metadata",
+                total_assets=len(exports),
+                total_collections=0,
+            )
+
+            result["completed_at"] = datetime.now()
+            result["status"] = "success"
+
+            self.sheets.write_sync_log(result)
+
+            # Print report
+            report = self.stats.to_report()
+            self._print_report(report)
+            print(f"\n[Checksums] Saved: {checksum_count}")
+
+        except Exception as e:
+            result["status"] = "failed"
+            result["completed_at"] = datetime.now()
+            self.sheets.write_sync_log(result)
+            print(f"Sync failed: {e}")
+            raise
+
+        finally:
+            self.iconik.close()
+
+        return result
+
+    def _sync_assets_with_checksums(self, view_id: str | None) -> tuple[list[dict], int]:
+        """Sync all assets and save checksums.
+
+        Args:
+            view_id: Metadata view UUID
+
+        Returns:
+            Tuple of (exports list, checksum count)
+        """
+        print("\nFetching assets with metadata and saving checksums...")
+
+        exports = []
+        checksum_count = 0
+
+        for asset in self.iconik.get_all_assets():
+            self.stats.processed += 1
+
+            export_data = {
+                "id": asset.id,
+                "title": asset.title,
+            }
+
+            # Collect raw data for checksum
+            segments_raw = []
+            metadata_raw = {}
+
+            # Fetch segments
+            self._fetch_segments(asset.id, export_data)
+            try:
+                segments = self.iconik.get_asset_segments(asset.id, raise_for_404=False)
+                if segments:
+                    segments_raw = segments
+            except Exception:
+                pass
+
+            # Fetch metadata
+            if view_id:
+                self._fetch_metadata(asset.id, view_id, export_data)
+                try:
+                    metadata = self.iconik.get_asset_metadata(
+                        asset.id, view_id, raise_for_404=False
+                    )
+                    if metadata:
+                        metadata_raw = metadata.get("metadata_values", {})
+                except Exception:
+                    pass
+
+            # Calculate and save checksum
+            current_checksum = calculate_asset_checksum(metadata_raw, segments_raw)
+            self.state.update_asset_checksum(asset.id, current_checksum)
+            checksum_count += 1
+
+            exports.append(export_data)
+
+            if self.stats.processed % 100 == 0:
+                self._print_progress()
+
+        self.stats.total_assets = len(exports)
+
+        # Write to sheet
+        print(f"\nProcessed {len(exports)} assets, saved {checksum_count} checksums")
+        print("Writing to Iconik_Full_Metadata sheet...")
+        self.sheets.write_full_metadata(exports)
+
+        return exports, checksum_count
 
     def _run_incremental(self, skip_sampling: bool = True) -> dict:
         """Run incremental sync - only process changed assets.
