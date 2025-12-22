@@ -12,10 +12,21 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-# Fix Windows console encoding
-if sys.platform == "win32":
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
+# Fix Windows console encoding (only once, track via env var)
+import os
+if sys.platform == "win32" and not os.environ.get("NAMS_STDIO_WRAPPED"):
+    try:
+        if hasattr(sys.stdout, "buffer"):
+            sys.stdout = io.TextIOWrapper(
+                sys.stdout.buffer, encoding="utf-8", errors="replace", line_buffering=True
+            )
+        if hasattr(sys.stderr, "buffer"):
+            sys.stderr = io.TextIOWrapper(
+                sys.stderr.buffer, encoding="utf-8", errors="replace", line_buffering=True
+            )
+        os.environ["NAMS_STDIO_WRAPPED"] = "1"
+    except Exception:
+        pass  # Ignore if buffer unavailable
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).parent.parent.parent
@@ -72,7 +83,10 @@ def run_task() -> dict:
     def log(msg: str):
         timestamp = datetime.now().strftime("%H:%M:%S")
         line = f"[{timestamp}] {msg}"
-        print(line)
+        try:
+            print(line, flush=True)
+        except (ValueError, OSError):
+            pass  # stdout may be closed
         with open(log_file, "a", encoding="utf-8") as f:
             f.write(line + "\n")
 

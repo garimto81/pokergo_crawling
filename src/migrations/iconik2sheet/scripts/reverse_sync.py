@@ -11,10 +11,27 @@ Usage:
 """
 
 import argparse
+import io
 import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+
+# Fix Windows console encoding (only once, track via env var)
+import os
+if sys.platform == "win32" and not os.environ.get("NAMS_STDIO_WRAPPED"):
+    try:
+        if hasattr(sys.stdout, "buffer"):
+            sys.stdout = io.TextIOWrapper(
+                sys.stdout.buffer, encoding="utf-8", errors="replace", line_buffering=True
+            )
+        if hasattr(sys.stderr, "buffer"):
+            sys.stderr = io.TextIOWrapper(
+                sys.stderr.buffer, encoding="utf-8", errors="replace", line_buffering=True
+            )
+        os.environ["NAMS_STDIO_WRAPPED"] = "1"
+    except Exception:
+        pass  # Ignore if buffer unavailable
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
