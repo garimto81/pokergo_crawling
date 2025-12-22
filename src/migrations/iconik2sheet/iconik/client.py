@@ -1,6 +1,7 @@
 """Iconik API Client."""
 
-from typing import Any, Generator
+from collections.abc import Generator
+from typing import Any
 
 import httpx
 from rich.progress import Progress, TaskID
@@ -317,6 +318,59 @@ class IconikClient:
             data["title"] = title
 
         return self._post(f"/assets/v1/assets/{asset_id}/segments/", data)
+
+    def update_asset_segment(
+        self,
+        asset_id: str,
+        segment_id: str,
+        time_start_ms: int,
+        time_end_ms: int,
+        segment_type: str | None = None,
+        title: str | None = None,
+    ) -> dict[str, Any]:
+        """Update a segment (timecode) on an asset.
+
+        Args:
+            asset_id: Asset UUID
+            segment_id: Segment UUID
+            time_start_ms: Start time in milliseconds
+            time_end_ms: End time in milliseconds
+            segment_type: Optional - MARKER, QC, GENERIC, COMMENT, TAG, TRANSCRIPTION, SCENE, PERSON
+            title: Optional segment title
+
+        Returns:
+            Updated segment data
+        """
+        data = {
+            "time_start_milliseconds": time_start_ms,
+            "time_end_milliseconds": time_end_ms,
+        }
+        if segment_type:
+            data["segment_type"] = segment_type
+        if title:
+            data["title"] = title
+
+        return self._put(f"/assets/v1/assets/{asset_id}/segments/{segment_id}/", data)
+
+    def delete_asset_segment(self, asset_id: str, segment_id: str) -> None:
+        """Delete a segment from an asset.
+
+        Args:
+            asset_id: Asset UUID
+            segment_id: Segment UUID
+        """
+        response = self.client.delete(
+            f"/assets/v1/assets/{asset_id}/segments/{segment_id}/"
+        )
+        if response.status_code == 404:
+            raise IconikNotFoundError(
+                f"Segment not found: {segment_id}", status_code=404
+            )
+        if response.status_code >= 400:
+            raise IconikAPIError(
+                f"Delete failed: {response.text[:200]}",
+                status_code=response.status_code,
+            )
 
     # Collections API
     def get_collections_page(self, page: int = 1, per_page: int | None = None) -> IconikPaginatedResponse:
