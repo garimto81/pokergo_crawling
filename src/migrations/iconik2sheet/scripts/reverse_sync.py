@@ -10,10 +10,10 @@ Usage:
     python -m scripts.reverse_sync                    # Full sync
 """
 
-import sys
-from pathlib import Path
 import argparse
+import sys
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -28,7 +28,8 @@ from googleapiclient.discovery import build
 from config.settings import get_settings
 from iconik import IconikClient
 from iconik.exceptions import IconikAPIError
-
+from sync.checksum import calculate_row_checksum
+from sync.state import SyncState
 
 # Metadata field mapping
 METADATA_FIELD_MAP = {
@@ -239,7 +240,7 @@ class ReverseSync:
                         else:
                             results["metadata"]["skipped"] += 1
                     else:
-                        status_parts.append(f"meta:FAIL")
+                        status_parts.append("meta:FAIL")
                         results["metadata"]["failed"] += 1
 
             # Timecode sync
@@ -256,7 +257,7 @@ class ReverseSync:
                         else:
                             results["timecode"]["skipped"] += 1
                     else:
-                        status_parts.append(f"tc:FAIL")
+                        status_parts.append("tc:FAIL")
                         results["timecode"]["failed"] += 1
 
             if status_parts:
@@ -275,20 +276,241 @@ class ReverseSync:
 
         if not timecode_only:
             m = results["metadata"]
-            print(f"\nMetadata:")
+            print("\nMetadata:")
             print(f"  Updated: {m['updated']}")
             print(f"  Skipped: {m['skipped']}")
             print(f"  Failed: {m['failed']}")
 
         if not metadata_only:
             t = results["timecode"]
-            print(f"\nTimecode:")
+            print("\nTimecode:")
             print(f"  Created: {t['created']}")
             print(f"  Skipped: {t['skipped']}")
             print(f"  Failed: {t['failed']}")
 
         self.iconik.close()
         return results
+
+
+class IncrementalReverseSync(ReverseSync):
+    """Incremental reverse sync - only process changed rows.
+
+    Uses checksum comparison to detect changes and only syncs
+    modified rows to iconik.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.state = SyncState()
+
+    def run(
+        self,
+        dry_run: bool = True,
+        limit: int | None = None,
+        metadata_only: bool = False,
+        timecode_only: bool = False,
+        force_full: bool = False,
+    ) -> dict:
+        """Run incremental or full reverse sync.
+
+        Args:
+            dry_run: Preview without actual changes
+            limit: Limit number of assets to process
+            metadata_only: Only sync metadata
+            timecode_only: Only sync timecodes
+            force_full: Force full sync even if checksums exist
+
+        Returns:
+            Sync results dict
+        """
+        # Check if full sync is needed
+        if force_full or not self.state.data.row_checksums:
+            print("Running FULL reverse sync (first run or forced)")
+            result = super().run(
+                dry_run=dry_run,
+                limit=limit,
+                metadata_only=metadata_only,
+                timecode_only=timecode_only,
+            )
+            # Save checksums after full sync
+            if not dry_run:
+                self._save_all_checksums()
+            return result
+
+        # Run incremental sync
+        return self._run_incremental(
+            dry_run=dry_run,
+            limit=limit,
+            metadata_only=metadata_only,
+            timecode_only=timecode_only,
+        )
+
+    def _save_all_checksums(self) -> None:
+        """Save checksums for all rows after full sync."""
+        headers, data = self.read_sheet_data()
+
+        for row in data:
+            asset_id = row.get("id", "").strip()
+            if asset_id:
+                checksum = calculate_row_checksum(row)
+                self.state.update_row_checksum(asset_id, checksum)
+
+        self.state.save()
+        print(f"Saved {len(self.state.data.row_checksums)} row checksums")
+
+    def _run_incremental(
+        self,
+        dry_run: bool = True,
+        limit: int | None = None,
+        metadata_only: bool = False,
+        timecode_only: bool = False,
+    ) -> dict:
+        """Run incremental reverse sync.
+
+        Only processes rows that have changed since last sync.
+        """
+        sync_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+        print("\n" + "=" * 60)
+        print("INCREMENTAL REVERSE SYNC: Sheets -> iconik")
+        print("=" * 60)
+        print(f"\nSync ID: {sync_id}")
+        print(f"Mode: {'DRY RUN' if dry_run else 'LIVE'}")
+        print(f"Stored row checksums: {len(self.state.data.row_checksums)}")
+
+        if not self.view_id:
+            print("\nERROR: ICONIK_METADATA_VIEW_ID not set")
+            return {"error": "Missing view_id"}
+
+        # Read data
+        headers, data = self.read_sheet_data()
+        if not data:
+            return {"error": "No data"}
+
+        # Detect changed rows
+        changed_rows = []
+        unchanged_count = 0
+
+        for row in data:
+            asset_id = row.get("id", "").strip()
+            if not asset_id:
+                continue
+
+            current_checksum = calculate_row_checksum(row)
+
+            if self.state.needs_row_update(asset_id, current_checksum):
+                changed_rows.append((row, current_checksum))
+            else:
+                unchanged_count += 1
+
+        print(f"\n   Changed: {len(changed_rows)}, Unchanged: {unchanged_count}")
+
+        if not changed_rows:
+            print("\n   No changes detected - skipping sync")
+            return {
+                "sync_id": sync_id,
+                "total": len(data),
+                "changed": 0,
+                "unchanged": unchanged_count,
+                "metadata": {"updated": 0, "skipped": 0, "failed": 0},
+                "timecode": {"created": 0, "skipped": 0, "failed": 0},
+            }
+
+        # Apply limit to changed rows
+        if limit:
+            changed_rows = changed_rows[:limit]
+            print(f"   Limiting to {limit} rows")
+
+        # Process changed rows
+        results = {
+            "sync_id": sync_id,
+            "total": len(data),
+            "changed": len(changed_rows),
+            "unchanged": unchanged_count,
+            "metadata": {"updated": 0, "skipped": 0, "failed": 0},
+            "timecode": {"created": 0, "skipped": 0, "failed": 0},
+        }
+
+        print(f"\n2. Processing {len(changed_rows)} changed rows...")
+
+        for i, (row, checksum) in enumerate(changed_rows):
+            asset_id = row.get("id", "").strip()
+            title = row.get("title", "")[:35]
+
+            status_parts = []
+
+            # Metadata sync
+            if not timecode_only:
+                metadata = self.build_metadata_payload(row)
+                if metadata:
+                    result = self.sync_metadata(asset_id, metadata, dry_run)
+                    if result.get("success"):
+                        action = result.get("action", "ok")
+                        status_parts.append(f"meta:{action}")
+                        if action in ("updated", "would_update"):
+                            results["metadata"]["updated"] += 1
+                        else:
+                            results["metadata"]["skipped"] += 1
+                    else:
+                        status_parts.append("meta:FAIL")
+                        results["metadata"]["failed"] += 1
+
+            # Timecode sync
+            if not metadata_only:
+                timecode = self.get_timecode(row)
+                if timecode:
+                    time_start_ms, time_end_ms = timecode
+                    result = self.sync_timecode(asset_id, time_start_ms, time_end_ms, dry_run)
+                    if result.get("success"):
+                        action = result.get("action", "ok")
+                        status_parts.append(f"tc:{action}")
+                        if action in ("created", "would_create"):
+                            results["timecode"]["created"] += 1
+                        else:
+                            results["timecode"]["skipped"] += 1
+                    else:
+                        status_parts.append("tc:FAIL")
+                        results["timecode"]["failed"] += 1
+
+            # Update checksum if successful and not dry run
+            if not dry_run and results["metadata"]["failed"] == 0:
+                self.state.update_row_checksum(asset_id, checksum)
+
+            if status_parts:
+                status = " | ".join(status_parts)
+                print(f"   [{i+1}] {asset_id[:8]}... | {status} | {title}")
+
+        # Save state
+        if not dry_run:
+            self.state.save()
+
+        # Summary
+        self._print_incremental_summary(results)
+
+        self.iconik.close()
+        return results
+
+    def _print_incremental_summary(self, results: dict) -> None:
+        """Print incremental sync summary."""
+        print("\n" + "=" * 60)
+        print("INCREMENTAL SUMMARY")
+        print("=" * 60)
+        print(f"\nSync ID: {results['sync_id']}")
+        print(f"Total rows: {results['total']}")
+        print(f"Changed: {results['changed']}")
+        print(f"Unchanged: {results['unchanged']}")
+
+        m = results["metadata"]
+        print("\nMetadata:")
+        print(f"  Updated: {m['updated']}")
+        print(f"  Skipped: {m['skipped']}")
+        print(f"  Failed: {m['failed']}")
+
+        t = results["timecode"]
+        print("\nTimecode:")
+        print(f"  Created: {t['created']}")
+        print(f"  Skipped: {t['skipped']}")
+        print(f"  Failed: {t['failed']}")
 
 
 def main() -> None:

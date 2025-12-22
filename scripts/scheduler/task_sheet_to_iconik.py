@@ -90,14 +90,18 @@ def run_task() -> dict:
             load_dotenv(env_local)
             log(f"환경변수 로드: {env_local}")
 
-        # ReverseSync 실행 (metadata-only 모드)
-        from scripts.reverse_sync import ReverseSync
+        # IncrementalReverseSync 실행 (증분 처리)
+        import os
 
-        log("Sheets → Iconik 동기화 시작 (metadata-only)...")
-        sync = ReverseSync()
+        from scripts.reverse_sync import IncrementalReverseSync
+
+        force_full = os.environ.get("NAMS_FORCE_FULL_SYNC") == "1"
+        log(f"Sheets → Iconik {'전체' if force_full else '증분'} 동기화 시작 (metadata-only)...")
+        sync = IncrementalReverseSync()
         result = sync.run(
             dry_run=False,
             metadata_only=True,  # 메타데이터만 동기화 (timecode는 수동)
+            force_full=force_full,
         )
 
         duration = time.time() - start_time

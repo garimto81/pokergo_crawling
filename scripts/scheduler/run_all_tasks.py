@@ -4,10 +4,11 @@
 PRD-0010: 세 가지 작업을 순차적으로 실행하고 결과 요약 제공
 
 Usage:
-    python scripts/scheduler/run_all_tasks.py              # 전체 실행
+    python scripts/scheduler/run_all_tasks.py              # 증분 실행 (기본)
     python scripts/scheduler/run_all_tasks.py --task 1     # 작업 1만 실행
     python scripts/scheduler/run_all_tasks.py --task 1,2   # 작업 1, 2 실행
     python scripts/scheduler/run_all_tasks.py --dry-run    # 실행 없이 계획만 출력
+    python scripts/scheduler/run_all_tasks.py --force-full # 전체 동기화 강제
 """
 
 from __future__ import annotations
@@ -35,13 +36,23 @@ from scripts.scheduler.notifier import NotificationStatus, get_notifier  # noqa:
 def run_all_tasks(
     tasks_to_run: list[int] | None = None,
     dry_run: bool = False,
+    force_full: bool = False,
 ) -> dict:
     """모든 작업 실행
 
     Args:
         tasks_to_run: 실행할 작업 번호 리스트 (None이면 전체 실행)
         dry_run: True면 실제 실행 없이 계획만 출력
+        force_full: True면 증분 대신 전체 동기화 강제
     """
+    import os
+
+    # Set force_full flag via environment variable for child modules
+    if force_full:
+        os.environ["NAMS_FORCE_FULL_SYNC"] = "1"
+    else:
+        os.environ.pop("NAMS_FORCE_FULL_SYNC", None)
+
     start_time = time.time()
     notifier = get_notifier()
 
@@ -93,7 +104,8 @@ def run_all_tasks(
     log("NAMS 스케줄러 - 통합 실행")
     log("=" * 60)
     log(f"시작 시간: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    log(f"실행 모드: {'DRY RUN' if dry_run else 'LIVE'}")
+    sync_mode = "FULL SYNC" if force_full else "INCREMENTAL"
+    log(f"실행 모드: {'DRY RUN' if dry_run else sync_mode}")
     log(f"실행 작업: {[t['id'] for t in tasks]}")
     log("")
 
@@ -219,13 +231,22 @@ def main():
         action="store_true",
         help="실행 없이 계획만 출력",
     )
+    parser.add_argument(
+        "--force-full",
+        action="store_true",
+        help="증분 대신 전체 동기화 강제 (7일 주기 무시)",
+    )
     args = parser.parse_args()
 
     tasks_to_run = None
     if args.task:
         tasks_to_run = [int(t.strip()) for t in args.task.split(",")]
 
-    results = run_all_tasks(tasks_to_run=tasks_to_run, dry_run=args.dry_run)
+    results = run_all_tasks(
+        tasks_to_run=tasks_to_run,
+        dry_run=args.dry_run,
+        force_full=args.force_full,
+    )
 
     # 실패 시 exit code 1
     failed = results.get("summary", {}).get("failed", 0)

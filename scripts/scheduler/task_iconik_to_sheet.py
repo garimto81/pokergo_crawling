@@ -90,12 +90,15 @@ def run_task() -> dict:
             load_dotenv(env_local)
             log(f"환경변수 로드: {env_local}")
 
-        # FullMetadataSync 실행
-        from sync.full_metadata_sync import FullMetadataSync
+        # IncrementalMetadataSync 실행 (증분 처리)
+        import os
 
-        log("Iconik → Sheets 동기화 시작...")
-        sync = FullMetadataSync()
-        result = sync.run(skip_sampling=True)  # 스케줄러에서는 샘플링 스킵
+        from sync.full_metadata_sync import IncrementalMetadataSync
+
+        force_full = os.environ.get("NAMS_FORCE_FULL_SYNC") == "1"
+        log(f"Iconik → Sheets {'전체' if force_full else '증분'} 동기화 시작...")
+        sync = IncrementalMetadataSync()
+        result = sync.run(skip_sampling=True, force_full=force_full)
 
         duration = time.time() - start_time
 

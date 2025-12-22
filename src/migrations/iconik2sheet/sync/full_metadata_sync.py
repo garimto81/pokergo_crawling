@@ -8,6 +8,7 @@ from iconik import IconikClient
 from iconik.exceptions import IconikAPIError, IconikNotFoundError
 from sheets import SheetsWriter
 
+from .checksum import calculate_asset_checksum
 from .state import SyncState
 from .stats import SyncStats
 
@@ -375,3 +376,208 @@ class FullMetadataSync:
             for err in report["error_samples"][:3]:
                 detail = f" - {err['detail']}" if err.get("detail") else ""
                 print(f"  - {err['type']}: {err['asset_id']}{detail}")
+
+
+class IncrementalMetadataSync(FullMetadataSync):
+    """Incremental metadata sync - only process changed assets.
+
+    Uses checksum comparison to detect changes and only updates
+    modified rows in the sheet.
+    """
+
+    def run(
+        self,
+        skip_sampling: bool = True,
+        force_full: bool = False,
+    ) -> dict:
+        """Run incremental or full sync based on state.
+
+        Args:
+            skip_sampling: Skip pre-sync sampling (default True for incremental)
+            force_full: Force full sync even if checksums exist
+
+        Returns:
+            Sync result summary
+        """
+        # Check if full sync is needed
+        if force_full or self.state.should_force_full_sync():
+            print("Running FULL sync (first run or 7+ days since last full sync)")
+            result = super().run(skip_sampling=skip_sampling)
+            self.state.mark_full_sync_complete()
+            return result
+
+        # Run incremental sync
+        return self._run_incremental(skip_sampling)
+
+    def _run_incremental(self, skip_sampling: bool = True) -> dict:
+        """Run incremental sync - only process changed assets.
+
+        Args:
+            skip_sampling: Skip pre-sync sampling
+
+        Returns:
+            Sync result summary
+        """
+        sync_id = str(uuid.uuid4())[:8]
+        started_at = datetime.now()
+
+        print(f"Starting INCREMENTAL metadata sync (ID: {sync_id})")
+        print(f"Stored checksums: {len(self.state.data.asset_checksums)}")
+
+        result = {
+            "sync_id": sync_id,
+            "sync_type": "incremental_metadata",
+            "started_at": started_at,
+            "completed_at": None,
+            "assets_processed": 0,
+            "assets_changed": 0,
+            "assets_unchanged": 0,
+            "status": "running",
+        }
+
+        try:
+            settings = get_settings()
+            view_id = settings.iconik.metadata_view_id if settings.iconik else None
+
+            if not view_id:
+                print("Warning: ICONIK_METADATA_VIEW_ID not set")
+
+            # Sync with incremental logic
+            changed_exports, unchanged_count = self._sync_incremental(view_id)
+
+            result["assets_processed"] = len(changed_exports) + unchanged_count
+            result["assets_changed"] = len(changed_exports)
+            result["assets_unchanged"] = unchanged_count
+
+            # Update sheet with only changed rows
+            if changed_exports:
+                print(f"\nUpdating {len(changed_exports)} changed rows in sheet...")
+                update_result = self.sheets.update_rows_by_id(
+                    "Iconik_Full_Metadata",
+                    changed_exports,
+                    id_column="id",
+                )
+                print(f"  Updated: {update_result['updated']}, Inserted: {update_result['inserted']}")
+            else:
+                print("\nNo changes detected - sheet up to date")
+
+            # Save state
+            self.state.save()
+            self.state.mark_sync_complete(
+                sync_type="incremental_metadata",
+                total_assets=result["assets_processed"],
+                total_collections=0,
+            )
+
+            result["completed_at"] = datetime.now()
+            result["status"] = "success"
+            self.sheets.write_sync_log(result)
+
+            self._print_incremental_summary(result)
+
+        except Exception as e:
+            result["status"] = "failed"
+            result["completed_at"] = datetime.now()
+            self.sheets.write_sync_log(result)
+            print(f"Sync failed: {e}")
+            raise
+
+        finally:
+            self.iconik.close()
+
+        return result
+
+    def _sync_incremental(self, view_id: str | None) -> tuple[list[dict], int]:
+        """Sync assets with incremental change detection.
+
+        Args:
+            view_id: Metadata view UUID
+
+        Returns:
+            Tuple of (changed_exports, unchanged_count)
+        """
+        print("\nProcessing assets with change detection...")
+
+        changed_exports = []
+        unchanged_count = 0
+        processed = 0
+
+        for asset in self.iconik.get_all_assets():
+            processed += 1
+
+            # Build export data (same as full sync)
+            export_data = {
+                "id": asset.id,
+                "title": asset.title,
+            }
+
+            # Collect raw data for checksum
+            segments_raw = []
+            metadata_raw = {}
+
+            # Fetch segments
+            try:
+                segments = self.iconik.get_asset_segments(asset.id, raise_for_404=False)
+                if segments:
+                    segments_raw = segments
+                    first_segment = segments[0]
+                    time_start = first_segment.get("time_start_milliseconds")
+                    time_end = first_segment.get("time_end_milliseconds")
+
+                    if time_start is not None:
+                        export_data["time_start_ms"] = time_start
+                        export_data["time_start_S"] = time_start / 1000
+                    if time_end is not None:
+                        export_data["time_end_ms"] = time_end
+                        export_data["time_end_S"] = time_end / 1000
+            except Exception:
+                pass
+
+            # Fetch metadata
+            if view_id:
+                try:
+                    metadata = self.iconik.get_asset_metadata(
+                        asset.id, view_id, raise_for_404=False
+                    )
+                    if metadata:
+                        metadata_raw = metadata.get("metadata_values", {})
+                        for api_field, model_field in METADATA_FIELD_MAP.items():
+                            field_data = metadata_raw.get(api_field)
+                            value = extract_field_values(field_data)
+                            if value is not None:
+                                export_data[model_field] = value
+                except Exception:
+                    pass
+
+            # Calculate checksum
+            current_checksum = calculate_asset_checksum(metadata_raw, segments_raw)
+
+            # Check if changed
+            if self.state.needs_asset_update(asset.id, current_checksum):
+                changed_exports.append(export_data)
+                self.state.update_asset_checksum(asset.id, current_checksum)
+            else:
+                unchanged_count += 1
+
+            if processed % 100 == 0:
+                print(f"  ... {processed} processed ({len(changed_exports)} changed)")
+
+        print(f"\nTotal: {processed} processed, {len(changed_exports)} changed, {unchanged_count} unchanged")
+
+        return changed_exports, unchanged_count
+
+    def _print_incremental_summary(self, result: dict) -> None:
+        """Print incremental sync summary."""
+        duration = (result["completed_at"] - result["started_at"]).total_seconds()
+
+        print("\n" + "=" * 60)
+        print("INCREMENTAL SYNC SUMMARY")
+        print("=" * 60)
+        print(f"  Duration: {duration:.1f}s")
+        print(f"  Total processed: {result['assets_processed']}")
+        print(f"  Changed: {result['assets_changed']}")
+        print(f"  Unchanged: {result['assets_unchanged']}")
+
+        if result["assets_processed"] > 0:
+            change_rate = result["assets_changed"] / result["assets_processed"] * 100
+            print(f"  Change rate: {change_rate:.1f}%")
