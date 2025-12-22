@@ -135,3 +135,124 @@ class TestMetadataFieldMap:
     def test_field_count(self):
         """Should have exactly 29 metadata fields."""
         assert len(METADATA_FIELD_MAP) == 29
+
+
+class TestSegmentMetadataExtraction:
+    """Tests for segment metadata_values extraction."""
+
+    def test_extract_metadata_from_segment(self):
+        """Segment metadata_values should be extracted correctly."""
+        # Simulate segment response with metadata_values
+        segment = {
+            "id": "segment-123",
+            "time_start_milliseconds": 125000,
+            "time_end_milliseconds": 180000,
+            "segment_type": "GENERIC",
+            "metadata_values": {
+                "Description": {
+                    "field_values": [{"value": "Phil Ivey bluffs with 72o"}]
+                },
+                "PlayersTags": {
+                    "field_values": [
+                        {"value": "Phil Ivey"},
+                        {"value": "Daniel Negreanu"},
+                    ]
+                },
+                "Year_": {
+                    "field_values": [{"value": "2024"}]
+                },
+            },
+        }
+
+        metadata_values = segment.get("metadata_values", {})
+
+        # Extract Description
+        desc = extract_field_values(metadata_values.get("Description"))
+        assert desc == "Phil Ivey bluffs with 72o"
+
+        # Extract PlayersTags (multi-value)
+        players = extract_field_values(metadata_values.get("PlayersTags"))
+        assert players == "Phil Ivey,Daniel Negreanu"
+
+        # Extract Year_
+        year = extract_field_values(metadata_values.get("Year_"))
+        assert year == "2024"
+
+    def test_segment_without_metadata_values(self):
+        """Segment without metadata_values should not cause errors."""
+        segment = {
+            "id": "segment-123",
+            "time_start_milliseconds": 125000,
+            "time_end_milliseconds": 180000,
+            "segment_type": "GENERIC",
+            # No metadata_values key
+        }
+
+        metadata_values = segment.get("metadata_values", {})
+        assert metadata_values == {}
+
+        # Extract should return None for missing fields
+        desc = extract_field_values(metadata_values.get("Description"))
+        assert desc is None
+
+    def test_segment_with_empty_metadata_values(self):
+        """Segment with empty metadata_values should not cause errors."""
+        segment = {
+            "id": "segment-123",
+            "time_start_milliseconds": 125000,
+            "time_end_milliseconds": 180000,
+            "segment_type": "GENERIC",
+            "metadata_values": {},
+        }
+
+        metadata_values = segment.get("metadata_values", {})
+
+        desc = extract_field_values(metadata_values.get("Description"))
+        assert desc is None
+
+    def test_metadata_priority_segment_over_asset(self):
+        """Segment metadata should take priority over asset metadata.
+
+        This tests the expected behavior:
+        - If segment has Description, use segment's Description
+        - If segment doesn't have PlayersTags, use asset's PlayersTags
+        """
+        segment_metadata = {
+            "Description": {
+                "field_values": [{"value": "Segment description"}]
+            },
+            # PlayersTags missing in segment
+        }
+
+        asset_metadata = {
+            "Description": {
+                "field_values": [{"value": "Asset description"}]
+            },
+            "PlayersTags": {
+                "field_values": [{"value": "From Asset"}]
+            },
+        }
+
+        export_data = {}
+        segment_fields = set()
+
+        # Step 1: Extract from segment (priority)
+        for api_field, model_field in METADATA_FIELD_MAP.items():
+            field_data = segment_metadata.get(api_field)
+            value = extract_field_values(field_data)
+            if value is not None:
+                export_data[model_field] = value
+                segment_fields.add(model_field)
+
+        # Step 2: Extract from asset (fallback, skip existing)
+        for api_field, model_field in METADATA_FIELD_MAP.items():
+            if model_field in segment_fields:
+                continue
+            field_data = asset_metadata.get(api_field)
+            value = extract_field_values(field_data)
+            if value is not None:
+                export_data[model_field] = value
+
+        # Verify priority
+        assert export_data.get("Description") == "Segment description"  # From segment
+        assert export_data.get("PlayersTags") == "From Asset"  # Fallback from asset

@@ -217,6 +217,10 @@ class FullMetadataSync:
     def _sync_assets_with_metadata(self, view_id: str | None) -> list[dict]:
         """Sync all assets with full metadata and graceful error handling.
 
+        Metadata priority:
+        1. Segment metadata (Timed Metadata from Segment Panel) - highest priority
+        2. Asset metadata (from Metadata View) - fallback for missing fields
+
         Args:
             view_id: Metadata view UUID (or None to skip metadata)
 
@@ -224,6 +228,7 @@ class FullMetadataSync:
             List of export data dicts
         """
         print("\nFetching assets with metadata...")
+        print("  Priority: Segment metadata > Asset metadata")
 
         exports = []
 
@@ -236,12 +241,17 @@ class FullMetadataSync:
                 "title": asset.title,
             }
 
-            # Fetch segments
-            self._fetch_segments(asset.id, export_data)
+            # Fetch segments first (includes metadata_values - highest priority)
+            segment_metadata = self._fetch_segments(asset.id, export_data)
 
-            # Fetch metadata
+            # Fetch asset-level metadata (fallback for fields not in segment)
             if view_id:
-                self._fetch_metadata(asset.id, view_id, export_data)
+                self._fetch_metadata(
+                    asset.id,
+                    view_id,
+                    export_data,
+                    skip_fields=set(segment_metadata.keys()),
+                )
 
             exports.append(export_data)
 
@@ -257,19 +267,28 @@ class FullMetadataSync:
 
         return exports
 
-    def _fetch_segments(self, asset_id: str, export_data: dict) -> None:
+    def _fetch_segments(self, asset_id: str, export_data: dict) -> dict:
         """Fetch segments with graceful 404 handling.
+
+        Extracts both timecode and metadata_values from segments.
+        Segment metadata takes priority over Asset-level metadata.
 
         Args:
             asset_id: Asset UUID
             export_data: Dict to populate with segment data
+
+        Returns:
+            Dict of extracted segment metadata fields (for priority handling)
         """
+        segment_metadata = {}
+
         try:
             segments = self.iconik.get_asset_segments(asset_id, raise_for_404=False)
 
             if segments:
                 first_segment = segments[0]
-                # API returns time_start_milliseconds, time_end_milliseconds
+
+                # Extract timecodes
                 time_start = first_segment.get("time_start_milliseconds")
                 time_end = first_segment.get("time_end_milliseconds")
 
@@ -281,6 +300,17 @@ class FullMetadataSync:
                     export_data["time_end_ms"] = time_end
                     export_data["time_end_S"] = time_end / 1000
 
+                # Extract metadata_values from segment (Timed Metadata)
+                # This is where workers input metadata via Segment Panel
+                metadata_values = first_segment.get("metadata_values", {})
+                if metadata_values:
+                    for api_field, model_field in METADATA_FIELD_MAP.items():
+                        field_data = metadata_values.get(api_field)
+                        value = extract_field_values(field_data)
+                        if value is not None:
+                            export_data[model_field] = value
+                            segment_metadata[model_field] = value
+
                 self.stats.record_segments_result(asset_id, segments)
             else:
                 self.stats.record_segments_result(asset_id, [])
@@ -291,14 +321,28 @@ class FullMetadataSync:
             # Log but continue - segments are optional
             self.stats.record_segments_result(asset_id, [])
 
-    def _fetch_metadata(self, asset_id: str, view_id: str, export_data: dict) -> None:
+        return segment_metadata
+
+    def _fetch_metadata(
+        self,
+        asset_id: str,
+        view_id: str,
+        export_data: dict,
+        skip_fields: set[str] | None = None,
+    ) -> None:
         """Fetch metadata with graceful 404 handling.
+
+        Asset-level metadata is used as fallback for fields not found in segments.
+        If skip_fields is provided, those fields will not be overwritten.
 
         Args:
             asset_id: Asset UUID
             view_id: Metadata view UUID
             export_data: Dict to populate with metadata fields
+            skip_fields: Set of field names already populated from segments (priority)
         """
+        skip_fields = skip_fields or set()
+
         try:
             metadata = self.iconik.get_asset_metadata(
                 asset_id, view_id, raise_for_404=False
@@ -312,6 +356,10 @@ class FullMetadataSync:
             extracted_fields = {}
 
             for api_field, model_field in METADATA_FIELD_MAP.items():
+                # Skip fields already populated from segment metadata
+                if model_field in skip_fields:
+                    continue
+
                 field_data = metadata_values.get(api_field)
                 # API 응답 구조: {"field_values": [{"value": "..."}, ...]}
                 # 다중 값 필드 처리 (PlayersTags, PokerPlayTags 등)
@@ -627,6 +675,10 @@ class IncrementalMetadataSync(FullMetadataSync):
     def _sync_incremental(self, view_id: str | None) -> tuple[list[dict], int]:
         """Sync assets with incremental change detection.
 
+        Metadata priority (same as full sync):
+        1. Segment metadata (Timed Metadata) - highest priority
+        2. Asset metadata - fallback
+
         Args:
             view_id: Metadata view UUID
 
@@ -634,6 +686,7 @@ class IncrementalMetadataSync(FullMetadataSync):
             Tuple of (changed_exports, unchanged_count)
         """
         print("\nProcessing assets with change detection...")
+        print("  Priority: Segment metadata > Asset metadata")
 
         changed_exports = []
         unchanged_count = 0
@@ -651,13 +704,16 @@ class IncrementalMetadataSync(FullMetadataSync):
             # Collect raw data for checksum
             segments_raw = []
             metadata_raw = {}
+            segment_metadata_fields = set()  # Track fields from segment
 
-            # Fetch segments
+            # Fetch segments first (highest priority for metadata)
             try:
                 segments = self.iconik.get_asset_segments(asset.id, raise_for_404=False)
                 if segments:
                     segments_raw = segments
                     first_segment = segments[0]
+
+                    # Extract timecodes
                     time_start = first_segment.get("time_start_milliseconds")
                     time_end = first_segment.get("time_end_milliseconds")
 
@@ -667,10 +723,20 @@ class IncrementalMetadataSync(FullMetadataSync):
                     if time_end is not None:
                         export_data["time_end_ms"] = time_end
                         export_data["time_end_S"] = time_end / 1000
+
+                    # Extract segment metadata_values (Timed Metadata)
+                    segment_metadata = first_segment.get("metadata_values", {})
+                    if segment_metadata:
+                        for api_field, model_field in METADATA_FIELD_MAP.items():
+                            field_data = segment_metadata.get(api_field)
+                            value = extract_field_values(field_data)
+                            if value is not None:
+                                export_data[model_field] = value
+                                segment_metadata_fields.add(model_field)
             except Exception:
                 pass
 
-            # Fetch metadata
+            # Fetch asset-level metadata (fallback for missing fields)
             if view_id:
                 try:
                     metadata = self.iconik.get_asset_metadata(
@@ -679,6 +745,9 @@ class IncrementalMetadataSync(FullMetadataSync):
                     if metadata:
                         metadata_raw = metadata.get("metadata_values", {})
                         for api_field, model_field in METADATA_FIELD_MAP.items():
+                            # Skip fields already from segment
+                            if model_field in segment_metadata_fields:
+                                continue
                             field_data = metadata_raw.get(api_field)
                             value = extract_field_values(field_data)
                             if value is not None:
@@ -686,7 +755,7 @@ class IncrementalMetadataSync(FullMetadataSync):
                 except Exception:
                     pass
 
-            # Calculate checksum
+            # Calculate checksum (includes both segment and asset metadata)
             current_checksum = calculate_asset_checksum(metadata_raw, segments_raw)
 
             # Check if changed

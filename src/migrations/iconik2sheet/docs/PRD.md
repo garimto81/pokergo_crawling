@@ -138,6 +138,50 @@ class IconikAssetExport(BaseModel):
 | Status | String | success/failed |
 | Error | String | 에러 메시지 (실패 시) |
 
+### 3.4 Iconik 데이터 구조 (Segment / Subclip)
+
+#### Segment (Time-based Metadata)
+
+작업자들이 Iconik UI에서 메타데이터를 입력하는 핵심 구조:
+
+- **API**: `/assets/v1/assets/{id}/segments/`
+- **용도**: 타임코드 + 메타데이터 저장 (Timed Metadata)
+- **Generic 타입**이 메타데이터 저장용
+
+| 필드 | 타입 | 설명 |
+|------|------|------|
+| time_start_milliseconds | Integer | 시작 시간 (ms) |
+| time_end_milliseconds | Integer | 종료 시간 (ms) |
+| segment_type | String | GENERIC, MARKER, QC, COMMENT 등 |
+| **metadata_values** | Object | **29개 메타데이터 필드** |
+
+#### Subclip (별도 Asset)
+
+- Parent Segment에서 파생된 **별도 Asset**
+- metadata_values가 Parent Segment와 **양방향 동기화**
+- 독립적으로 검색 가능 (별도 인덱싱)
+
+#### 데이터 흐름
+
+```
+Parent Asset
+└── Segment (Generic)
+    ├── time_start/end_milliseconds
+    └── metadata_values (29개 필드)
+           ↕ 양방향 동기화
+Subclip Asset
+    └── metadata_values (클론)
+```
+
+#### 현재 시스템 Gap
+
+| 항목 | 현재 코드 | 실제 iconik |
+|------|----------|------------|
+| Segment | 타임코드만 추출 | 타임코드 + metadata_values |
+| Subclip | 미처리 | 별도 Asset (동기화) |
+
+> **상세 문서**: `docs/etc/ICONIK_DATA_STRUCTURE.md`
+
 ---
 
 ## 4. 아키텍처
