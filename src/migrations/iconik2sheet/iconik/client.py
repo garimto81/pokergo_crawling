@@ -207,6 +207,28 @@ class IconikClient:
         data = self._get(f"/assets/v1/assets/{asset_id}/")
         return IconikAsset(**data)
 
+    def delete_asset(self, asset_id: str) -> None:
+        """Delete an asset by ID.
+
+        Args:
+            asset_id: Asset UUID to delete
+
+        Raises:
+            IconikNotFoundError: Asset not found
+            IconikAPIError: Delete failed
+        """
+        response = self.client.delete(f"/assets/v1/assets/{asset_id}/")
+
+        if response.status_code == 404:
+            raise IconikNotFoundError(
+                f"Asset not found: {asset_id}", status_code=404
+            )
+        if response.status_code >= 400:
+            raise IconikAPIError(
+                f"Delete failed: {response.text[:200]}",
+                status_code=response.status_code,
+            )
+
     # Metadata API
     def get_asset_metadata(
         self, asset_id: str, view_id: str, raise_for_404: bool = True

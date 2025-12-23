@@ -304,8 +304,8 @@ class FullMetadataSync:
             else:
                 self.stats.general_assets += 1
 
-                # General Asset: Segment API에서 타임코드 추출 (GENERIC만)
-                self._fetch_segments(asset.id, export_data)
+                # General Asset: 풀 영상이므로 타임코드 불필요
+                # (Segment API 호출 제거 - time_start_ms는 빈 값)
 
                 # Cache parent title for subclip resolution
                 parent_cache[asset.id] = asset.title
