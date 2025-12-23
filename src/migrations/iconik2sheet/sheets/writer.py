@@ -377,3 +377,146 @@ class SheetsWriter:
             self.append_rows(sheet_name, new_rows)
 
         return result
+
+    def write_general_metadata(self, exports: list[dict[str, Any]]) -> int:
+        """Write general (parent) assets to Iconik_General_Metadata sheet.
+
+        35 columns - same structure as Iconik_Full_Metadata.
+        Only includes assets with type=ASSET (not SUBCLIP).
+        """
+        sheet_name = "Iconik_General_Metadata"
+        self.create_sheet_if_not_exists(sheet_name)
+        self.clear_sheet(sheet_name)
+
+        # Headers (35 columns - same as Iconik_Full_Metadata)
+        headers = [
+            "id", "title",
+            "time_start_ms", "time_end_ms", "time_start_S", "time_end_S",
+            "Description", "ProjectName", "ProjectNameTag", "SearchTag",
+            "Year_", "Location", "Venue", "EpisodeEvent",
+            "Source", "Scene", "GameType", "PlayersTags",
+            "HandGrade", "HANDTag", "EPICHAND", "Tournament",
+            "PokerPlayTags", "Adjective", "Emotion", "AppearanceOutfit",
+            "SceneryObject", "_gcvi_tags", "Badbeat", "Bluff",
+            "Suckout", "Cooler", "RUNOUTTag", "PostFlop", "All-in",
+        ]
+        rows = [headers]
+
+        # Data rows
+        for export in exports:
+            row = [
+                export.get("id", ""),
+                export.get("title", ""),
+                str(export.get("time_start_ms", "")),
+                str(export.get("time_end_ms", "")),
+                str(export.get("time_start_S", "")),
+                str(export.get("time_end_S", "")),
+                export.get("Description", ""),
+                export.get("ProjectName", ""),
+                export.get("ProjectNameTag", ""),
+                export.get("SearchTag", ""),
+                str(export.get("Year_", "")),
+                export.get("Location", ""),
+                export.get("Venue", ""),
+                export.get("EpisodeEvent", ""),
+                export.get("Source", ""),
+                export.get("Scene", ""),
+                export.get("GameType", ""),
+                export.get("PlayersTags", ""),
+                export.get("HandGrade", ""),
+                export.get("HANDTag", ""),
+                str(export.get("EPICHAND", "")),
+                export.get("Tournament", ""),
+                export.get("PokerPlayTags", ""),
+                export.get("Adjective", ""),
+                export.get("Emotion", ""),
+                export.get("AppearanceOutfit", ""),
+                export.get("SceneryObject", ""),
+                export.get("_gcvi_tags", ""),
+                export.get("Badbeat", ""),
+                export.get("Bluff", ""),
+                export.get("Suckout", ""),
+                export.get("Cooler", ""),
+                export.get("RUNOUTTag", ""),
+                export.get("PostFlop", ""),
+                export.get("All_in", ""),
+            ]
+            rows.append(row)
+
+        return self.write_rows(sheet_name, rows)
+
+    def write_subclips_metadata(self, exports: list[dict[str, Any]]) -> int:
+        """Write subclips to Iconik_Subclips_Metadata sheet.
+
+        37 columns - 35 base columns (same as GGmetadata_and_timestamps)
+        + 2 parent columns at the end.
+        """
+        sheet_name = "Iconik_Subclips_Metadata"
+        self.create_sheet_if_not_exists(sheet_name)
+        self.clear_sheet(sheet_name)
+
+        # Headers (37 columns)
+        # First 35 columns match GGmetadata_and_timestamps exactly
+        # Last 2 columns are parent relationship info
+        headers = [
+            # 35 columns - same as GGmetadata_and_timestamps
+            "id", "title",
+            "time_start_ms", "time_end_ms", "time_start_S", "time_end_S",
+            "Description", "ProjectName", "ProjectNameTag", "SearchTag",
+            "Year_", "Location", "Venue", "EpisodeEvent",
+            "Source", "Scene", "GameType", "PlayersTags",
+            "HandGrade", "HANDTag", "EPICHAND", "Tournament",
+            "PokerPlayTags", "Adjective", "Emotion", "AppearanceOutfit",
+            "SceneryObject", "_gcvi_tags", "Badbeat", "Bluff",
+            "Suckout", "Cooler", "RUNOUTTag", "PostFlop", "All-in",
+            # 2 parent columns at the end
+            "original_asset_id", "parent_title",
+        ]
+        rows = [headers]
+
+        # Data rows
+        for export in exports:
+            row = [
+                # 35 columns - same order as GGmetadata_and_timestamps
+                export.get("id", ""),
+                export.get("title", ""),
+                str(export.get("time_start_ms", "")),
+                str(export.get("time_end_ms", "")),
+                str(export.get("time_start_S", "")),
+                str(export.get("time_end_S", "")),
+                export.get("Description", ""),
+                export.get("ProjectName", ""),
+                export.get("ProjectNameTag", ""),
+                export.get("SearchTag", ""),
+                str(export.get("Year_", "")),
+                export.get("Location", ""),
+                export.get("Venue", ""),
+                export.get("EpisodeEvent", ""),
+                export.get("Source", ""),
+                export.get("Scene", ""),
+                export.get("GameType", ""),
+                export.get("PlayersTags", ""),
+                export.get("HandGrade", ""),
+                export.get("HANDTag", ""),
+                str(export.get("EPICHAND", "")),
+                export.get("Tournament", ""),
+                export.get("PokerPlayTags", ""),
+                export.get("Adjective", ""),
+                export.get("Emotion", ""),
+                export.get("AppearanceOutfit", ""),
+                export.get("SceneryObject", ""),
+                export.get("_gcvi_tags", ""),
+                export.get("Badbeat", ""),
+                export.get("Bluff", ""),
+                export.get("Suckout", ""),
+                export.get("Cooler", ""),
+                export.get("RUNOUTTag", ""),
+                export.get("PostFlop", ""),
+                export.get("All_in", ""),
+                # Parent columns at the end
+                export.get("original_asset_id", ""),
+                export.get("parent_title", ""),
+            ]
+            rows.append(row)
+
+        return self.write_rows(sheet_name, rows)

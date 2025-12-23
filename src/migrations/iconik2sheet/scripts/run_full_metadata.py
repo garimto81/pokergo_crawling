@@ -26,6 +26,17 @@ def main() -> None:
         action="store_true",
         help="Skip pre-sync sampling check",
     )
+    parser.add_argument(
+        "--mode",
+        choices=["split", "combined"],
+        default="split",
+        help="Output mode: 'split' (2 sheets) or 'combined' (1 sheet, legacy). Default: split",
+    )
+    parser.add_argument(
+        "--include-full",
+        action="store_true",
+        help="Also write to Iconik_Full_Metadata (for backwards compatibility with split mode)",
+    )
     args = parser.parse_args()
 
     print("=" * 60)
@@ -35,20 +46,33 @@ def main() -> None:
     print("This script extracts ALL metadata from Iconik API")
     print("including segments (timecodes) and metadata fields.")
     print()
-    print("Output: Iconik_Full_Metadata sheet (35 columns)")
-    print("        Matching GGmetadata_and_timestamps structure")
+    if args.mode == "split":
+        print("Output: Iconik_General_Metadata + Iconik_Subclips_Metadata")
+        print("        (General: 35 columns, Subclips: 37 columns)")
+    else:
+        print("Output: Iconik_Full_Metadata sheet (35 columns)")
+        print("        Combined mode (legacy)")
+    if args.include_full:
+        print("        + Iconik_Full_Metadata (legacy backup)")
     if args.limit:
         print(f"        Limit: {args.limit} assets")
     print()
 
     sync = FullMetadataSync()
-    result = sync.run(skip_sampling=args.skip_sampling, limit=args.limit)
+    result = sync.run(
+        skip_sampling=args.skip_sampling,
+        limit=args.limit,
+        mode=args.mode,
+        include_full=args.include_full,
+    )
 
     print()
     print("Summary:")
     print(f"  Sync ID: {result['sync_id']}")
     print(f"  Status: {result['status']}")
-    print(f"  Assets: {result['assets_processed']}")
+    print(f"  Total Assets: {result['assets_processed']}")
+    print(f"  General (ASSET): {result.get('general_assets', 0)}")
+    print(f"  Subclips: {result.get('subclip_assets', 0)}")
 
 
 if __name__ == "__main__":

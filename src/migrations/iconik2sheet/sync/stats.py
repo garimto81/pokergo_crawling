@@ -28,6 +28,12 @@ class SyncStats:
     segments_404: int = 0
     subclips_with_timecode: int = 0  # Subclip with timecode from asset itself
 
+    # Asset type separation (for split mode)
+    general_assets: int = 0  # type=ASSET (parent/main videos)
+    subclip_assets: int = 0  # type=SUBCLIP
+    parent_title_resolved: int = 0  # Subclips with resolved parent_title
+    parent_title_missing: int = 0  # Subclips without parent_title
+
     # Field-level statistics
     field_counts: dict[str, int] = field(default_factory=dict)
 
@@ -138,6 +144,12 @@ class SyncStats:
             "summary": {
                 "total_assets": self.total_assets,
                 "processed": self.processed,
+                "general_assets": self.general_assets,
+                "subclip_assets": self.subclip_assets,
+            },
+            "parent_resolution": {
+                "resolved": self.parent_title_resolved,
+                "missing": self.parent_title_missing,
             },
             "metadata": {
                 "success": self.metadata_success,

@@ -9,6 +9,7 @@ from iconik.exceptions import IconikAPIError, IconikNotFoundError
 from sheets import SheetsWriter
 
 from .checksum import calculate_asset_checksum
+from .master_catalog import get_classifier
 from .state import SyncState
 from .stats import SyncStats
 
@@ -96,12 +97,20 @@ class FullMetadataSync:
         self.state = SyncState()
         self.stats = SyncStats()
 
-    def run(self, skip_sampling: bool = False, limit: int | None = None) -> dict:
+    def run(
+        self,
+        skip_sampling: bool = False,
+        limit: int | None = None,
+        mode: str = "split",
+        include_full: bool = False,
+    ) -> dict:
         """Run full metadata sync.
 
         Args:
             skip_sampling: Skip pre-sync sampling check
             limit: Maximum number of assets to process (None for all)
+            mode: Output mode - "split" (2 sheets) or "combined" (1 sheet)
+            include_full: Also write to Iconik_Full_Metadata (legacy compatibility)
 
         Returns:
             Sync result summary
@@ -136,10 +145,14 @@ class FullMetadataSync:
                 self._run_sampling(view_id)
 
             # Sync assets with full metadata
-            exports = self._sync_assets_with_metadata(view_id, limit=limit)
+            exports = self._sync_assets_with_metadata(
+                view_id, limit=limit, mode=mode, include_full=include_full
+            )
             result["assets_processed"] = len(exports)
             result["assets_with_metadata"] = self.stats.metadata_success
             result["assets_with_segments"] = self.stats.segments_success
+            result["general_assets"] = self.stats.general_assets
+            result["subclip_assets"] = self.stats.subclip_assets
 
             # Update state
             self.state.mark_sync_complete(
@@ -216,28 +229,40 @@ class FullMetadataSync:
             print(f"    (Could not fetch views: {e})")
 
     def _sync_assets_with_metadata(
-        self, view_id: str | None, limit: int | None = None
+        self,
+        view_id: str | None,
+        limit: int | None = None,
+        mode: str = "split",
+        include_full: bool = False,
     ) -> list[dict]:
         """Sync all assets with full metadata and graceful error handling.
 
-        Metadata priority:
-        1. Segment metadata (Timed Metadata from Segment Panel) - highest priority
-        2. Asset metadata (from Metadata View) - fallback for missing fields
+        Separates ASSET (general/parent) and SUBCLIP into different lists
+        and resolves parent_title for subclips.
 
         Args:
             view_id: Metadata view UUID (or None to skip metadata)
             limit: Maximum number of assets to process (None for all)
+            mode: "split" (2 sheets) or "combined" (1 sheet)
+            include_full: Also write to Iconik_Full_Metadata (legacy)
 
         Returns:
-            List of export data dicts
+            List of all export data dicts
         """
         if limit:
             print(f"\nFetching assets with metadata (limit: {limit})...")
         else:
             print("\nFetching assets with metadata...")
-        print("  Priority: Segment metadata > Asset metadata")
+        print(f"  Mode: {mode}")
 
-        exports = []
+        # Load Master_Catalog classifier for General vs Subclip classification
+        classifier = get_classifier()
+
+        # Separate lists for split mode
+        general_exports = []  # In Master_Catalog → General
+        subclip_exports = []  # Not in Master_Catalog → Subclip
+        parent_cache = {}  # {asset_id: title} for parent title resolution
+        all_exports = []
 
         for i, asset in enumerate(self.iconik.get_all_assets()):
             if limit is not None and i >= limit:
@@ -250,37 +275,115 @@ class FullMetadataSync:
                 "title": asset.title,
             }
 
-            # Subclip: 타임코드가 Asset 자체에 저장됨
-            if asset.type == "SUBCLIP":
-                if asset.time_start_milliseconds is not None:
+            # Subclip 판별: Master_Catalog에 없으면 Subclip
+            # (기존 original_asset_id 기반 → Master_Catalog 기반으로 변경)
+            is_subclip = classifier.is_subclip(asset.title or "")
+
+            if is_subclip:
+                self.stats.subclip_assets += 1
+
+                # Subclip 타임코드: original_asset_id 있으면 Asset 자체에서, 없으면 Segment에서
+                if asset.original_asset_id and asset.time_start_milliseconds is not None:
+                    # type=SUBCLIP: 타임코드가 Asset 자체에 있음
                     export_data["time_start_ms"] = asset.time_start_milliseconds
                     export_data["time_start_S"] = asset.time_start_milliseconds / 1000
-                if asset.time_end_milliseconds is not None:
-                    export_data["time_end_ms"] = asset.time_end_milliseconds
-                    export_data["time_end_S"] = asset.time_end_milliseconds / 1000
-                self.stats.record_segments_result(asset.id, [], is_subclip=True)
+                    if asset.time_end_milliseconds is not None:
+                        export_data["time_end_ms"] = asset.time_end_milliseconds
+                        export_data["time_end_S"] = asset.time_end_milliseconds / 1000
+                    self.stats.record_segments_result(asset.id, [], is_subclip=True)
+                else:
+                    # type=ASSET but not in Master_Catalog (Hand clips 등)
+                    # → Segment API에서 타임코드 추출
+                    self._fetch_segments(asset.id, export_data)
+
+                # Add parent relationship fields
+                export_data["original_asset_id"] = asset.original_asset_id or ""
+                export_data["parent_title"] = ""  # Resolved later
+
+                subclip_exports.append(export_data)
             else:
-                # 일반 Asset: Segment API에서 타임코드 추출 (GENERIC만)
+                self.stats.general_assets += 1
+
+                # General Asset: Segment API에서 타임코드 추출 (GENERIC만)
                 self._fetch_segments(asset.id, export_data)
 
+                # Cache parent title for subclip resolution
+                parent_cache[asset.id] = asset.title
+
+                general_exports.append(export_data)
+
             # Fetch metadata from Asset Metadata API (primary source)
-            # Note: Segment.metadata_values is always empty, so no skip_fields needed
             if view_id:
                 self._fetch_metadata(asset.id, view_id, export_data)
 
-            exports.append(export_data)
+            all_exports.append(export_data)
 
             if self.stats.processed % 100 == 0:
                 self._print_progress()
 
-        self.stats.total_assets = len(exports)
+        self.stats.total_assets = len(all_exports)
 
-        # Write to sheet
-        print(f"\nProcessed {len(exports)} assets")
-        print("Writing to Iconik_Full_Metadata sheet...")
-        self.sheets.write_full_metadata(exports)
+        # Resolve parent titles for subclips
+        print(f"\nResolving parent titles for {len(subclip_exports)} subclips...")
+        self._resolve_parent_titles(subclip_exports, parent_cache)
 
-        return exports
+        # Write to sheets based on mode
+        print(f"\nProcessed {len(all_exports)} assets")
+        print(f"  General (ASSET): {len(general_exports)}")
+        print(f"  Subclips: {len(subclip_exports)}")
+
+        if mode == "split":
+            print("Writing to Iconik_General_Metadata sheet...")
+            self.sheets.write_general_metadata(general_exports)
+            print("Writing to Iconik_Subclips_Metadata sheet...")
+            self.sheets.write_subclips_metadata(subclip_exports)
+        else:
+            # combined mode
+            print("Writing to Iconik_Full_Metadata sheet...")
+            self.sheets.write_full_metadata(all_exports)
+
+        # Optional: also write combined for backwards compatibility
+        if include_full and mode == "split":
+            print("Also writing to Iconik_Full_Metadata (legacy)...")
+            self.sheets.write_full_metadata(all_exports)
+
+        return all_exports
+
+    def _resolve_parent_titles(
+        self, subclip_exports: list[dict], parent_cache: dict[str, str]
+    ) -> None:
+        """Resolve parent_title for all subclips.
+
+        First tries parent_cache, then falls back to API call.
+
+        Args:
+            subclip_exports: List of subclip export dicts to update
+            parent_cache: {asset_id: title} cache from first pass
+        """
+        for export in subclip_exports:
+            parent_id = export.get("original_asset_id")
+            if not parent_id:
+                self.stats.parent_title_missing += 1
+                continue
+
+            # Try cache first
+            if parent_id in parent_cache:
+                export["parent_title"] = parent_cache[parent_id]
+                self.stats.parent_title_resolved += 1
+                continue
+
+            # Cache miss - fetch from API
+            try:
+                parent_asset = self.iconik.get_asset(parent_id)
+                export["parent_title"] = parent_asset.title
+                parent_cache[parent_id] = parent_asset.title
+                self.stats.parent_title_resolved += 1
+            except IconikNotFoundError:
+                export["parent_title"] = "(Deleted Parent)"
+                self.stats.parent_title_missing += 1
+            except Exception:
+                export["parent_title"] = ""
+                self.stats.parent_title_missing += 1
 
     def _fetch_segments(self, asset_id: str, export_data: dict) -> None:
         """Fetch segments with graceful 404 handling.
@@ -401,6 +504,14 @@ class FullMetadataSync:
         print("\n[Summary]")
         print(f"  Total assets: {report['summary']['total_assets']}")
         print(f"  Processed: {report['summary']['processed']}")
+        print(f"  General (ASSET): {report['summary']['general_assets']}")
+        print(f"  Subclips: {report['summary']['subclip_assets']}")
+
+        if report.get("parent_resolution"):
+            pr = report["parent_resolution"]
+            print(f"\n[Parent Resolution]")
+            print(f"  Resolved: {pr['resolved']}")
+            print(f"  Missing: {pr['missing']}")
 
         print("\n[Metadata]")
         m = report["metadata"]

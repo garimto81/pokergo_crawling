@@ -20,8 +20,10 @@ python -m scripts.test_connection    # 연결 테스트
 python -m scripts.run_full_sync      # 전체 동기화 (기본 정보 7컬럼)
 python -m scripts.run_full_metadata  # 전체 메타데이터 (35컬럼) ★
 python -m scripts.run_full_metadata --limit 10  # 10개만 테스트
+python -m scripts.run_full_metadata --mode combined  # legacy 단일 시트 모드
 python -m scripts.run_incremental    # 증분 동기화
 python -m scripts.analyze_full_gap   # GG 시트 vs Iconik 갭 분석
+python -m scripts.analyze_master_catalog  # Master_Catalog 분류 분석 ★
 
 # 린트/테스트
 ruff check . --fix
@@ -43,6 +45,7 @@ iconik2sheet/
 ├── sync/
 │   ├── full_sync.py       # 전체 동기화
 │   ├── full_metadata_sync.py # 전체 메타데이터 (35컬럼) ★
+│   ├── master_catalog.py  # Master_Catalog 기반 분류기 ★★
 │   ├── stats.py           # 동기화 통계 (SyncStats)
 │   ├── incremental_sync.py # 증분 동기화
 │   └── state.py           # 상태 관리
@@ -117,34 +120,72 @@ result = sync.run()  # 전체 동기화
 ```
 
 **주요 기능**:
-- **Subclip 타임코드 처리**: Asset 자체에서 타임코드 추출 ★
+- **Master_Catalog 기반 분류**: General vs Subclip 자동 분류 ★★
+- **Subclip 타임코드 처리**: Asset 자체 또는 Segment에서 추출
 - **샘플링**: 10개 Asset으로 메타데이터 가용성 확인
 - **Graceful 404**: 메타데이터 없는 Asset도 계속 처리
 - **통계 리포트**: 성공/404/에러 카운트, 필드 커버리지
 
-**타임코드 추출 로직** (v2.1):
+**분류 로직** (v3.0 - Master_Catalog 기반):
 ```python
-if asset.type == "SUBCLIP":
-    # Subclip: Asset 자체에서 타임코드
-    time_start = asset.time_start_milliseconds
-    time_end = asset.time_end_milliseconds
+from sync.master_catalog import get_classifier
+
+classifier = get_classifier()
+
+# Master_Catalog에 Filename 매칭 → General
+# Master_Catalog에 없음 → Subclip
+is_subclip = classifier.is_subclip(asset.title)
+```
+
+**분류 기준**:
+| 조건 | 분류 | 시트 |
+|------|------|------|
+| title ∈ Master_Catalog | General | Iconik_General_Metadata |
+| title ∉ Master_Catalog | Subclip | Iconik_Subclips_Metadata |
+
+**타임코드 추출 로직** (v3.0):
+```python
+if is_subclip:
+    if asset.original_asset_id and asset.time_start_milliseconds:
+        # type=SUBCLIP: Asset 자체에 타임코드 있음
+        time_start = asset.time_start_milliseconds
+    else:
+        # Hand clips 등: Segment API에서 추출
+        segments = client.get_asset_segments(asset.id)
+        # GENERIC segment만 사용
 else:
-    # 일반 Asset: GENERIC Segment에서만 타임코드
+    # General: Segment API에서 타임코드 추출
     segments = client.get_asset_segments(asset.id)
-    generic = [s for s in segments if s.get("segment_type") == "GENERIC"]
-    if generic:
-        time_start = generic[0].get("time_start_milliseconds")
 ```
 
 **메타데이터 추출**: Asset Metadata API 사용 (`/metadata/v1/assets/{id}/views/{view_id}/`)
 
-**출력 예시**:
+**출력 예시** (v3.0):
 ```
-[Segments/Timecodes]
-  With segments: 7
-  Subclips (timecode from asset): 3
-  Empty: 0
+[MasterCatalog] Loaded 1051 unique filenames
+Processed 2854 assets
+  General (ASSET): 1042
+  Subclips: 1812
 ```
+
+### MasterCatalogClassifier (`sync/master_catalog.py`) ★★
+
+```python
+from sync.master_catalog import get_classifier
+
+classifier = get_classifier()
+
+# Master_Catalog에 있으면 General (NAS 원본 파일)
+classifier.is_general_asset("2010 WSOP ME08")  # True
+
+# Master_Catalog에 없으면 Subclip (파생 클립)
+classifier.is_subclip("1217_Hand_31_Jaffe...")  # True
+```
+
+**동작 원리**:
+1. UDM metadata 스프레드시트의 Master_Catalog 시트 조회
+2. Filename 컬럼에서 확장자 제외한 파일명 Set 생성 (1051개)
+3. Iconik Asset title과 매칭하여 분류
 
 ### SyncStats (`sync/stats.py`)
 
@@ -163,10 +204,16 @@ report = stats.to_report()  # 상세 보고서 생성
 
 | 시트명 | 컬럼 수 | 내용 |
 |--------|---------|------|
+| Iconik_General_Metadata | 35 | General Asset (Master_Catalog 매칭) ★★ |
+| Iconik_Subclips_Metadata | 37 | Subclip (Master_Catalog 미매칭) ★★ |
 | Iconik_Assets | 7 | 기본 Asset 정보 |
-| Iconik_Full_Metadata | 35 | 전체 메타데이터 (GGmetadata_and_timestamps 동일) ★ |
+| Iconik_Full_Metadata | 35 | 전체 메타데이터 (legacy, combined mode) |
 | Iconik_Collections | 5 | 컬렉션 계층 |
 | Sync_Log | 7 | 동기화 이력 |
+
+**v3.0 분리 모드** (기본):
+- `Iconik_General_Metadata`: 1,042개 (NAS 원본 파일)
+- `Iconik_Subclips_Metadata`: 1,812개 (파생 클립 + Hand clips)
 
 ## Environment
 
