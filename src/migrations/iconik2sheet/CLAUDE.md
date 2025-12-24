@@ -25,6 +25,19 @@ python -m scripts.run_incremental    # 증분 동기화
 python -m scripts.analyze_full_gap   # GG 시트 vs Iconik 갭 분석
 python -m scripts.analyze_master_catalog  # Master_Catalog 분류 분석 ★
 
+# ISG 상태 조회 ★★
+python -m scripts.check_isg                     # Storage 상태 요약
+python -m scripts.check_isg --detail            # 상세 정보
+python -m scripts.check_isg --jobs              # 진행 중인 작업 포함
+
+# Jobs 조회 (인제스트 모니터링) ★★
+python -m scripts.check_jobs                    # 최근 7일 전체
+python -m scripts.check_jobs --status failed    # 실패한 작업만
+python -m scripts.check_jobs --days 30          # 최근 30일
+python -m scripts.check_jobs --type transfer    # Transfer 작업만
+python -m scripts.check_jobs --output csv       # CSV 내보내기
+python -m scripts.check_jobs --output json      # JSON 내보내기
+
 # 린트/테스트
 ruff check . --fix
 pytest tests/ -v
@@ -73,6 +86,12 @@ with IconikClient() as client:
   - `segment.metadata_values`는 항상 비어있음 → Asset Metadata API 사용
 - `get_collections_page(page)` / `get_all_collections()` - 컬렉션
 - `health_check()` - 연결 테스트
+
+**Jobs API** (ISG 인제스트 모니터링) ★★:
+- `get_jobs_page(page, status, job_type, date_from)` - 작업 목록 페이지
+- `get_all_jobs(status, job_type, days)` - 전체 작업 조회 (Generator)
+- `get_job(job_id)` - 단일 작업 조회
+- `get_failed_jobs(days, job_type)` - 실패한 작업만 조회
 
 **Iconik 데이터 구조** (상세: `docs/etc/ICONIK_DATA_STRUCTURE.md`):
 - **Asset (type=ASSET)**: 타임코드는 Segment API에서 조회

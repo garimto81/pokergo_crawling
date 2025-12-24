@@ -14,7 +14,7 @@ from .exceptions import (
     IconikNotFoundError,
     IconikRateLimitError,
 )
-from .models import IconikAsset, IconikCollection, IconikPaginatedResponse
+from .models import IconikAsset, IconikCollection, IconikJob, IconikPaginatedResponse
 
 
 class IconikClient:
@@ -426,3 +426,124 @@ class IconikClient:
             return True
         except Exception:
             return False
+
+    # Jobs API
+    def get_jobs_page(
+        self,
+        page: int = 1,
+        per_page: int | None = None,
+        status: str | None = None,
+        job_type: str | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+    ) -> IconikPaginatedResponse:
+        """Get a single page of jobs with optional filters.
+
+        Args:
+            page: Page number (1-based)
+            per_page: Items per page
+            status: Filter by status (STARTED, FINISHED, FAILED, ABORTED)
+            job_type: Filter by job type (TRANSFER, TRANSCODE, DELETE, etc.)
+            date_from: Filter by date_created >= date_from (ISO format)
+            date_to: Filter by date_created <= date_to (ISO format)
+
+        Returns:
+            Paginated response with job objects
+        """
+        params: dict[str, Any] = {
+            "page": page,
+            "per_page": per_page or self.per_page,
+        }
+        if status:
+            params["status"] = status
+        if job_type:
+            params["type"] = job_type
+        if date_from:
+            params["date_created__gte"] = date_from
+        if date_to:
+            params["date_created__lte"] = date_to
+
+        data = self._get("/jobs/v1/jobs/", params=params)
+        return IconikPaginatedResponse(**data)
+
+    def get_all_jobs(
+        self,
+        status: str | None = None,
+        job_type: str | None = None,
+        days: int | None = None,
+        progress: Progress | None = None,
+        task_id: TaskID | None = None,
+    ) -> Generator[IconikJob, None, None]:
+        """Get all jobs with pagination and optional filters.
+
+        Args:
+            status: Filter by status (STARTED, FINISHED, FAILED, ABORTED)
+            job_type: Filter by job type (TRANSFER, TRANSCODE, DELETE, etc.)
+            days: Filter to jobs created within last N days
+            progress: Rich Progress instance for display
+            task_id: Rich TaskID for progress tracking
+
+        Yields:
+            IconikJob objects one by one
+        """
+        from datetime import datetime, timedelta, timezone
+
+        date_from = None
+        if days:
+            date_from = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+
+        page = 1
+        total_pages = 1
+
+        while page <= total_pages:
+            response = self.get_jobs_page(
+                page=page,
+                status=status,
+                job_type=job_type,
+                date_from=date_from,
+            )
+            total_pages = response.pages
+
+            if progress and task_id:
+                progress.update(
+                    task_id,
+                    total=response.total,
+                    completed=min(page * response.per_page, response.total),
+                )
+
+            for obj in response.objects:
+                yield IconikJob(**obj)
+
+            page += 1
+
+    def get_job(self, job_id: str) -> IconikJob:
+        """Get single job by ID.
+
+        Args:
+            job_id: Job UUID
+
+        Returns:
+            IconikJob object
+        """
+        data = self._get(f"/jobs/v1/jobs/{job_id}/")
+        return IconikJob(**data)
+
+    def get_failed_jobs(
+        self,
+        days: int = 7,
+        job_type: str | None = None,
+    ) -> Generator[IconikJob, None, None]:
+        """Convenience method to get failed jobs.
+
+        Args:
+            days: Look back N days (default: 7)
+            job_type: Filter by job type (TRANSFER, TRANSCODE, etc.)
+
+        Yields:
+            Failed IconikJob objects
+        """
+        yield from self.get_all_jobs(
+            status="FAILED",
+            job_type=job_type,
+            days=days,
+        )

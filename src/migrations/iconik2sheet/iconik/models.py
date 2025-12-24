@@ -77,6 +77,39 @@ class IconikSegment(BaseModel):
     segment_type: str = "GENERIC"
 
 
+class IconikJob(BaseModel):
+    """Iconik Job model for ISG/transfer/transcode jobs."""
+
+    model_config = {"from_attributes": True}
+
+    id: str
+    title: str | None = None
+    status: str  # STARTED, FINISHED, FAILED, ABORTED
+    type: str  # TRANSFER, TRANSCODE, DELETE, ANALYZE, etc.
+    object_id: str | None = None  # Related Asset ID
+    object_type: str | None = None  # "assets", "collections", etc.
+    progress: int = 0  # 0-100
+    error_message: str | None = None
+    message: str | None = None
+    storage_id: str | None = None
+    date_created: datetime | None = None
+    date_modified: datetime | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+
+
+class IconikJobSummary(BaseModel):
+    """Job statistics summary for reporting."""
+
+    total: int = 0
+    started: int = 0
+    finished: int = 0
+    failed: int = 0
+    aborted: int = 0
+    by_type: dict[str, int] = {}
+    by_storage: dict[str, int] = {}
+
+
 class IconikAssetExport(BaseModel):
     """35-column export model matching GGmetadata_and_timestamps structure.
 
