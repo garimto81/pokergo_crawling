@@ -425,9 +425,9 @@ if group.match_category in (NAS_ONLY_HISTORIC, NAS_ONLY_MODERN):
 
 | 문서 | 설명 |
 |------|------|
-| [MATCHING_RULES.md](MATCHING_RULES.md) | 파일 패턴 및 매칭 규칙 상세 (v4.0) |
-| [SYSTEM_OVERVIEW.md](SYSTEM_OVERVIEW.md) | NAMS 시스템 아키텍처 |
-| [DASHBOARD_GUIDE.md](DASHBOARD_GUIDE.md) | NAMS 대시보드 사용법 |
+| [MATCHING_RULES.md](../core/MATCHING_RULES.md) | 파일 패턴 및 매칭 규칙 상세 (v4.0) |
+| [SYSTEM_OVERVIEW.md](../core/SYSTEM_OVERVIEW.md) | NAMS 시스템 아키텍처 |
+| [DASHBOARD_GUIDE.md](../guides/DASHBOARD_GUIDE.md) | NAMS 대시보드 사용법 |
 
 ---
 

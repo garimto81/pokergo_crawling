@@ -347,7 +347,67 @@ Response:
 
 ---
 
-## 10. 참고 자료
+## 10. 메타데이터 필드 호환성
+
+> **중요**: Iconik 메타데이터 뷰의 많은 필드가 `dropdown` 타입으로, 사전 정의된 값만 허용합니다.
+
+### 10.1 필드 타입별 분류
+
+| 필드 타입 | 특징 | 예시 |
+|----------|------|------|
+| **text** | 자유 텍스트 입력 가능 | Description, Year_, Location |
+| **drop_down** | 사전 정의된 값만 허용 | HandGrade, HANDTag, Tournament |
+| **multi_select** | 복수 선택 가능 | PlayersTags, PokerPlayTags |
+
+### 10.2 Dropdown 필드 목록 (19개)
+
+| 필드 | 허용 값 예시 | 주의사항 |
+|------|-------------|----------|
+| HandGrade | `★`, `★★`, `★★★`, `★★★★`, `★★★★★` | 숫자 불가 |
+| HANDTag | `AA vs KK`, `AK vs AA` 등 정의된 패턴 | 자유형식 불가 |
+| Tournament | `bracelet`, `bracelet winner`, `survive` | WSOP Circuit 등 불가 |
+| Source | `Clean`, `PGM`, `Master Verison` | NAS 경로 불가 |
+| Venue | `Kings Casino`, `Commerce Casino` 등 | |
+| GameType | `Cash Game`, `Mystery Hand`, `GGPoker` | |
+| Scene | `Interview`, `Hand Clip` 등 | |
+| Emotion | `tilt`, `angry`, `hilarious` 등 | |
+| EPICHAND | `Royal Flush`, `Straight Flush`, `Quads` | |
+| Adjective | `incredible`, `craziest`, `unbelievable` | |
+| AppearanceOutfit | `haircut`, `mustache`, `outfit` | |
+| SceneryObject | `Bracelet`, `Trophy`, `Food` | |
+| Badbeat | `river badbeat`, `turn badbeat` | |
+| Bluff | `allin bluff` | |
+| Suckout | `river suckout`, `turn suckout` | |
+| Cooler | `flush over flush`, `set over set` | |
+| PostFlop | `open ended straight draw`, `flush draw` | |
+| RUNOUTTag | `1out`, `2outs` 등 | |
+| All-in | `4bet`, `5bet`, `preflop allin` | |
+
+### 10.3 외부 데이터 마이그레이션 시 주의사항
+
+**마이그레이션 가능 필드** (자유 텍스트):
+```python
+SAFE_FIELDS = {
+    "Description": "Description",
+    "Year_": "Year_",
+    "Location": "Location",
+    "PlayersTags": "PlayersTags",
+    "PokerPlayTags": "PokerPlayTags",
+}
+```
+
+**마이그레이션 제외 필드** (dropdown - 값 불일치 시 오류):
+```
+"no longer select in list" 오류 발생
+```
+
+### 10.4 관련 이슈
+
+- [#19](https://github.com/garimto81/pokergo_crawling/issues/19) - Iconik 메타데이터 오류값 추출
+
+---
+
+## 11. 참고 자료
 
 - [Subclips – iconik](https://help.iconik.backlight.co/hc/en-us/articles/25304106435863-Subclips)
 - [Segments Entities – iconik](https://help.iconik.backlight.co/hc/en-us/articles/25304074513815-Segments-Entities)

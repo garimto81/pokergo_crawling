@@ -74,7 +74,7 @@ python scripts/export_4sheets.py
 
 ## 3. 매칭 규칙 (v5.0)
 
-> **상세 규칙**: [MATCHING_RULES.md](MATCHING_RULES.md) 참조
+> **상세 규칙**: [MATCHING_RULES.md](../core/MATCHING_RULES.md) 참조
 
 ### 핵심 규칙 요약
 

@@ -2,7 +2,7 @@
 
 > NAS Asset Management System - WSOP 52년 역사 카테고리 구축
 
-**Version**: 3.0 | **Last Updated**: 2025-12-17
+**Version**: 4.0 | **Last Updated**: 2025-12-23
 
 ---
 
@@ -10,22 +10,6 @@
 
 NAMS는 3개의 NAS 드라이브(X:/Y:/Z:)에 보유한 WSOP 영상을 기반으로
 **1973년부터 현재까지 52년간의 WSOP 콘텐츠 카테고리**를 구축하는 시스템입니다.
-
-### 핵심 인사이트 (v4.0)
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    데이터 관계: 부분 매칭 (복잡함)                │
-├─────────────────────────────────────────────────────────────────┤
-│  [PokerGO 828개]              [NAS 858개 Active]                │
-│  ├─ 완성된 카테고리            ├─ 일부: PokerGO 매칭 가능        │
-│  ├─ 완성된 제목                └─ 일부: PokerGO 매칭 불가        │
-│                                                                 │
-│  → 전부 매칭되는 것도 아님 / 전부 안 되는 것도 아님              │
-│  → 개별 검사 + 매칭 작업 필요                                    │
-│  → PokerGO 카테고리/제목이 가장 완성도 높음 → 최대한 활용        │
-└─────────────────────────────────────────────────────────────────┘
-```
 
 ### 하이브리드 접근
 
@@ -37,101 +21,95 @@ NAS 파일 858개
     └─[매칭 불가]──▶ 자체 카테고리/제목 생성
 ```
 
-### 핵심 목표
-
-1. **NAS 파일 통합 관리**: 3개 드라이브(X:/Y:/Z:) 비디오 파일 메타데이터 통합
-2. **하이브리드 카테고리 구축**: PokerGO 매칭 + 자체 생성
-3. **PokerGO 우선 활용**: 매칭 가능 시 PokerGO 카테고리/제목 사용
-4. **자체 생성 보완**: 매칭 불가 시 패턴 기반 자동 생성
-5. **수동 검증 워크플로우**: 모든 매칭 결과 개별 검증
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                           NAMS 데이터 흐름                                    │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│   [NAS Drives]                              [PokerGO]                       │
-│   ┌─────────────┐                          ┌─────────────┐                  │
-│   │ X: PokerGO  │──┐                       │ wsop_final  │                  │
-│   │ (828 files) │  │                       │ .json       │                  │
-│   └─────────────┘  │    ┌──────────────┐   │ (828 eps)   │                  │
-│   ┌─────────────┐  ├───▶│   NAMS DB    │◀──└─────────────┘                  │
-│   │ Y: Backup   │  │    │  (SQLite)    │                                    │
-│   │ (1,568 files│  │    └──────┬───────┘                                    │
-│   └─────────────┘  │           │                                            │
-│   ┌─────────────┐  │           ▼                                            │
-│   │ Z: Archive  │──┘    ┌──────────────┐    ┌──────────────┐               │
-│   │ (1,405 files│       │ Pattern      │───▶│ Google       │               │
-│   └─────────────┘       │ Matching     │    │ Sheets       │               │
-│                         └──────────────┘    │ (5 sheets)   │               │
-│                                             └──────────────┘               │
-│                                                                             │
-│   Total: 3,801 video files (~22.5 TB)                                      │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
 ---
 
-## Data Sources
-
-### NAS Drives (Physical Files)
-
-| Drive | Path | Role | Files | Size |
-|-------|------|------|-------|------|
-| **X:** | GGP Footage/POKERGO | PokerGO Source | 828 | ~684 GB |
-| **Y:** | WSOP backup | Backup | 1,568 | ~1.8 TB |
-| **Z:** | Archive | Primary | 1,405 | ~20 TB |
-
-### PokerGO (Metadata)
-
-| Item | Value |
-|------|-------|
-| Total Episodes | 828 |
-| Source | wsop_final.json |
-| Coverage | 1973-2025 |
-| Era Distribution | CLASSIC(234), BOOM(included), HD(558), EU(36) |
-
-**상세 문서**:
-- [POKERGO_WSOP_CONTENT.md](POKERGO_WSOP_CONTENT.md) - 카테고리별 콘텐츠 가이드
-- [POKERGO_WSOP_FULL_LIST.md](POKERGO_WSOP_FULL_LIST.md) - 828개 에피소드 전체 목록
-
----
-
-## Document Hierarchy
+## Document Structure
 
 ```
 docs/
 ├── README.md              ← 현재 문서 (마스터 인덱스)
 │
-├── [Architecture]
-│   └── SYSTEM_OVERVIEW.md      # 전체 시스템 아키텍처 (v2.1)
+├── core/                  # 핵심 시스템 문서
+│   ├── SYSTEM_OVERVIEW.md      # 전체 시스템 아키텍처 (v2.1)
+│   ├── MATCHING_RULES.md       # 매칭 규칙 핵심 (v5.11)
+│   ├── MATCHING_PATTERNS_DETAIL.md  # 패턴 상세/변경이력 (v5.0)
+│   └── NAS_DRIVE_STRUCTURE.md  # 드라이브 물리 구조 (v1.0)
 │
-├── [PRD - Requirements]
-│   ├── PRD-CATALOG-DB.md         # ⭐ NAS 중심 카탈로그 DB 설계 (v1.0) - 최신
-│   ├── PRD-NAMS-MATCHING.md      # 매칭 시스템 요구사항 (v2.0) - deprecated
-│   ├── PRD-POKERGO-SOURCE.md     # X: 드라이브 통합 PRD (v1.0)
-│   └── PRD-NAMS-REFACTORING.md   # 기술 부채 로드맵
+├── prds/                  # PRD (요구사항)
+│   ├── PRD-CATALOG-DB.md       # NAS 중심 카탈로그 DB 설계
+│   ├── PRD-NAMS-MATCHING.md    # 매칭 시스템 (deprecated)
+│   ├── PRD-NAMS-REFACTORING.md # 기술 부채 로드맵
+│   ├── PRD-POKERGO-SOURCE.md   # X: 드라이브 통합 PRD
+│   ├── PRD-0001-NAMS-CATALOG-VALIDATOR.md  # 카탈로그 검증
+│   ├── PRD-0010-DAILY-SCHEDULER.md  # 일일 스케줄러
+│   ├── PRD-ICONIK-*.md (3개)   # Iconik 연동
+│   └── PRD-SHEET2*.md (2개)    # Sheets 연동
 │
-├── [Operations]
-│   ├── AUTOMATION_PIPELINE.md  # 파이프라인 실행 가이드 (v1.0)
-│   └── DASHBOARD_GUIDE.md      # UI 사용 가이드 (v2.0)
+├── guides/                # 운영 가이드
+│   ├── DASHBOARD_GUIDE.md      # UI 사용 가이드 (v2.0)
+│   ├── SCHEDULER_SETUP.md      # 스케줄러 설정
+│   └── AUTOMATION_PIPELINE.md  # 파이프라인 실행 가이드
 │
-├── [Technical Reference]
-│   ├── MATCHING_RULES.md           # 매칭 규칙 핵심 (v5.0)
-│   ├── MATCHING_PATTERNS_DETAIL.md # 패턴 상세/변경이력 (v5.0)
-│   └── NAS_DRIVE_STRUCTURE.md      # 드라이브 물리 구조 (v1.0)
-│
-├── [PokerGO Data]
+├── reference/             # 참조 데이터
+│   ├── GOOGLE_SHEETS_STRUCTURE.md  # Google Sheets 구조 (v1.0)
+│   ├── POKERGO_WSOP_FULL_LIST.md   # 828개 에피소드 전체 목록
 │   ├── POKERGO_WSOP_CONTENT.md     # 카테고리별 콘텐츠 가이드
-│   └── POKERGO_WSOP_FULL_LIST.md   # 828개 에피소드 전체 목록
+│   └── ICONIK_DATA_STRUCTURE.md    # Iconik 메타데이터 구조
 │
-├── [Status Reports]
-│   └── DB_STATUS_REPORT.md     # 현황 진단 보고서
+├── reports/               # 리포트
+│   └── iconik-data-comparison-report.md
 │
-└── [Archive]
-    ├── IMPLEMENTATION_PLAN.md      # → PRD에 통합됨
-    └── MATCHING_STRATEGY_ANALYSIS.md # → MATCHING_RULES에 통합됨
+└── archive/               # 과거 버전 보관
+    ├── matching/          # 매칭 전략 아카이브
+    ├── analysis/          # 분석 문서 아카이브
+    └── [기타 아카이브]
 ```
+
+---
+
+## Core Documents
+
+| Document | Purpose | Version |
+|----------|---------|---------|
+| [SYSTEM_OVERVIEW.md](core/SYSTEM_OVERVIEW.md) | 전체 시스템 설계, 데이터 흐름 | v2.1 |
+| [MATCHING_RULES.md](core/MATCHING_RULES.md) | 매칭 규칙 핵심 (절대원칙, 패턴) | v5.11 |
+| [MATCHING_PATTERNS_DETAIL.md](core/MATCHING_PATTERNS_DETAIL.md) | 패턴 상세, BOOM Era 매핑 | v5.0 |
+| [NAS_DRIVE_STRUCTURE.md](core/NAS_DRIVE_STRUCTURE.md) | X:/Y:/Z: 드라이브 폴더 구조 | v1.0 |
+
+---
+
+## PRDs
+
+| Document | Purpose | Status |
+|----------|---------|--------|
+| [PRD-CATALOG-DB.md](prds/PRD-CATALOG-DB.md) | NAS 중심 카탈로그 DB 설계 | Active |
+| [PRD-0010-DAILY-SCHEDULER.md](prds/PRD-0010-DAILY-SCHEDULER.md) | 일일 스케줄러 | Active |
+| [PRD-0001-NAMS-CATALOG-VALIDATOR.md](prds/PRD-0001-NAMS-CATALOG-VALIDATOR.md) | 카탈로그 검증 | Active |
+| [PRD-ICONIK-MASTER-MAPPING.md](prds/PRD-ICONIK-MASTER-MAPPING.md) | Iconik 마스터 매핑 | Active |
+| [PRD-SHEET2SHEET.md](prds/PRD-SHEET2SHEET.md) | Sheets 간 마이그레이션 | Active |
+
+[전체 PRD 목록 →](prds/)
+
+---
+
+## Guides
+
+| Document | Purpose |
+|----------|---------|
+| [DASHBOARD_GUIDE.md](guides/DASHBOARD_GUIDE.md) | NAMS UI 사용법, KPI 카드 |
+| [SCHEDULER_SETUP.md](guides/SCHEDULER_SETUP.md) | Windows Task Scheduler 설정 |
+| [AUTOMATION_PIPELINE.md](guides/AUTOMATION_PIPELINE.md) | 파이프라인 실행 가이드 |
+
+---
+
+## Reference
+
+| Document | Purpose |
+|----------|---------|
+| [GOOGLE_SHEETS_STRUCTURE.md](reference/GOOGLE_SHEETS_STRUCTURE.md) | Google Sheets 구조 (UDM/Iconik) |
+| [POKERGO_WSOP_FULL_LIST.md](reference/POKERGO_WSOP_FULL_LIST.md) | 828개 에피소드 전체 목록 |
+| [POKERGO_WSOP_CONTENT.md](reference/POKERGO_WSOP_CONTENT.md) | 카테고리별 콘텐츠 가이드 |
+| [ICONIK_DATA_STRUCTURE.md](reference/ICONIK_DATA_STRUCTURE.md) | Iconik 메타데이터 구조 |
 
 ---
 
@@ -145,25 +123,6 @@ docs/
 | **Region** | LV(Las Vegas), EU(Europe), APAC, PARADISE, CYPRUS, LA |
 | **Match Category** | MATCHED, NAS_ONLY_HISTORIC, NAS_ONLY_MODERN |
 | **Asset Group** | 동일 콘텐츠 파일들의 그룹 (Primary/Backup) |
-
-### Matching Status (2025-12-17)
-
-```
-┌─────────────────────────────────────────────┐
-│           Current Matching Status            │
-├─────────────────────────────────────────────┤
-│  PokerGO Episodes:       828                │
-│  Asset Groups:           826                │
-│  ├─ MATCHED:             440 (53.3%)        │
-│  └─ NAS_ONLY:            386 (46.7%)        │
-│                                             │
-│  NAS Files:            1,405                │
-│  ├─ Active:              858                │
-│  └─ Excluded:            547                │
-│                                             │
-│  패턴 추출률:           97.6%                │
-└─────────────────────────────────────────────┘
-```
 
 ### Execution Commands
 
@@ -181,111 +140,22 @@ python scripts/export_4sheets.py
 
 ---
 
-## Document Details
+## Data Sources
 
-### Architecture
-
-| Document | Purpose | Version |
-|----------|---------|---------|
-| [SYSTEM_OVERVIEW.md](SYSTEM_OVERVIEW.md) | 전체 시스템 설계, 데이터 흐름, 매칭 전략 | v2.1 |
-
-### PRD (Product Requirements)
-
-| Document | Purpose | Version |
-|----------|---------|---------|
-| ⭐ [PRD-CATALOG-DB.md](PRD-CATALOG-DB.md) | **NAS 중심 카탈로그 DB 설계** - 최신 접근법 | v1.0 |
-| [PRD-NAMS-MATCHING.md](PRD-NAMS-MATCHING.md) | ~~매칭 시스템~~ (deprecated - 1:1 매칭 불가 확인) | v2.0 |
-| [PRD-POKERGO-SOURCE.md](PRD-POKERGO-SOURCE.md) | X: 드라이브 통합 사양, Scanner/Export 확장 | v1.0 |
-| [PRD-NAMS-REFACTORING.md](PRD-NAMS-REFACTORING.md) | 코드 품질 개선, 기술 부채 해결 로드맵 | v1.0 |
-
-### Operations
-
-| Document | Purpose | Version |
-|----------|---------|---------|
-| [AUTOMATION_PIPELINE.md](AUTOMATION_PIPELINE.md) | 파이프라인 실행, 매칭 규칙 v5.0, 트러블슈팅 | v1.0 |
-| [DASHBOARD_GUIDE.md](DASHBOARD_GUIDE.md) | NAMS UI 사용법, KPI 카드, 워크플로우 | v2.0 |
-
-### Technical Reference
-
-| Document | Purpose | Version |
-|----------|---------|---------|
-| [MATCHING_RULES.md](MATCHING_RULES.md) | 매칭 규칙 핵심 (절대원칙, 패턴, Region, Grouping) | v5.0 |
-| [MATCHING_PATTERNS_DETAIL.md](MATCHING_PATTERNS_DETAIL.md) | 패턴 상세 예시, BOOM Era 매핑, 변경 이력 | v5.0 |
-| [NAS_DRIVE_STRUCTURE.md](NAS_DRIVE_STRUCTURE.md) | X:/Y:/Z: 드라이브 폴더 구조, 파일 분포 | v1.0 |
-
-### Status Reports
-
-| Document | Purpose | Date |
-|----------|---------|------|
-| [DB_STATUS_REPORT.md](DB_STATUS_REPORT.md) | 패턴 매칭 현황, 데이터 품질 진단 | 2025-12-17 |
+| Drive | Path | Role | Files | Size |
+|-------|------|------|-------|------|
+| **X:** | GGP Footage/POKERGO | PokerGO Source | 828 | ~684 GB |
+| **Y:** | WSOP backup | Backup | 1,568 | ~1.8 TB |
+| **Z:** | Archive | Primary | 1,405 | ~20 TB |
 
 ---
 
-## Data Flow
+## Archive
 
-### 1. Scan Phase
+과거 버전 및 분석 문서는 [archive/](archive/) 폴더에 보관됩니다.
 
-```
-NAS Drives → scanner.py → SQLite DB (nas_files table)
-```
-
-- X:/Y:/Z: 드라이브 스캔
-- 비디오 파일 메타데이터 추출
-- 제외 조건 플래깅 (Size < 1GB, Duration < 30min, Clip keywords)
-
-### 2. Pattern Matching Phase
-
-```
-nas_files → pattern_engine.py → Metadata Extraction
-```
-
-- 파일명에서 Year/Region/EventType/Episode 추출
-- 패턴 우선순위: DB 정의 패턴 → Fallback 패턴
-
-### 3. PokerGO Matching Phase
-
-```
-AssetGroups + PokerGO → matching.py → Match Results
-```
-
-- 양방향 매칭 (NAS → PokerGO, PokerGO → NAS)
-- Region/Episode/Event Type 제약 적용
-- DUPLICATE 감지 및 해결
-
-### 4. Export Phase
-
-```
-Match Results → export.py → Google Sheets (5 sheets)
-```
-
-- NAS_Origin_Raw, NAS_Archive_Raw, NAS_PokerGO_Raw
-- PokerGO_Raw, Matching_Integrated
-
----
-
-## Version Notes
-
-| Version | Component | Notes |
-|---------|-----------|-------|
-| v5.0 | Matching Rules | MATCHING_RULES.md (핵심) + MATCHING_PATTERNS_DETAIL.md (상세) |
-| v2.1 | System Overview | 드라이브 파일 수 업데이트 |
-| v2.0 | PRD-NAMS-MATCHING | DUPLICATE 100% 해결 |
-
-**Note**: 2025-12-17 문서 구조화 완료. MATCHING_RULES.md(v5.0)이 최신 규칙.
-
----
-
-## Contributing
-
-### Document Updates
-
-1. 버전 번호 증가 (Major.Minor)
-2. 변경 이력 섹션 업데이트
-3. README.md (이 문서) 업데이트
-
-### Archiving
-
-더 이상 관련 없는 문서는 `docs/archive/`로 이동.
+- [archive/matching/](archive/matching/) - 매칭 전략 히스토리
+- [archive/analysis/](archive/analysis/) - 분석 문서
 
 ---
 
@@ -293,4 +163,5 @@ Match Results → export.py → Google Sheets (5 sheets)
 
 | Version | Date | Changes |
 |---------|------|---------|
-| 1.0 | 2025-12-17 | 초기 문서 구조 정립, 아카이빙 체계 확립 |
+| 4.0 | 2025-12-23 | 문서 구조 재편 (core/guides/reference/prds/archive) |
+| 3.0 | 2025-12-17 | 초기 문서 구조 정립 |
