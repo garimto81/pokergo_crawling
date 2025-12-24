@@ -11,6 +11,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | 프로젝트 | 용도 | 기술 스택 | 상세 문서 |
 |----------|------|-----------|-----------|
 | `sheet2sheet/` | Sheets 간 마이그레이션 PWA | CLASP + React 19 | `sheet2sheet/CLAUDE.md` |
+| `sheet2sheet_migrate/` | Archive Metadata → Iconik 시트 통합 | Python 3.11+ | `sheet2sheet_migrate/CLAUDE.md` |
 | `sheet2iconik/` | Sheets → Iconik 업로드 | Python 3.11+ / httpx | `sheet2iconik/CLAUDE.md` |
 | `iconik2sheet/` | Iconik → Sheets 내보내기 | Python 3.11+ / httpx | `iconik2sheet/CLAUDE.md` |
 
@@ -57,6 +58,17 @@ ruff check . --fix
 pytest tests/ -v                     # 전체 테스트
 pytest tests/test_client.py -v       # 개별 테스트 (권장)
 pytest tests/test_client.py::test_health_check -v  # 단일 테스트
+```
+
+### sheet2sheet_migrate (Archive Metadata → Iconik)
+
+```powershell
+# 프로젝트 루트에서 실행
+python scripts/analyze_source_sheet.py       # 소스 시트 분석
+python scripts/run_sheet_migration.py        # Dry run
+python scripts/run_sheet_migration.py --show-mapping  # 매핑 미리보기
+python scripts/run_sheet_migration.py --execute       # 실행 (append)
+python scripts/run_sheet_migration.py --execute --mode overwrite  # 실행 (overwrite)
 ```
 
 ## Architecture
@@ -108,5 +120,6 @@ GOOGLE_SPREADSHEET_ID=spreadsheet-id
 | 문서 | 내용 |
 |------|------|
 | `../../docs/prds/PRD-SHEET2SHEET.md` | Sheet to Sheet PRD |
+| `../../docs/prds/PRD-SHEET2SHEET-MIGRATE.md` | Archive Metadata → Iconik 마이그레이션 PRD |
 | `../../docs/prds/PRD-SHEET2ICONIK.md` | Sheet to Iconik PRD |
 | `../../docs/prds/PRD-ICONIK2SHEET.md` | Iconik to Sheet PRD |
