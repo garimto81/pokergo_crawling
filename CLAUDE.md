@@ -8,9 +8,9 @@ NAMS - NAS 영상 파일 관리 및 PokerGO 메타데이터 매칭 시스템
 
 | 드라이브 | 역할 | 용도 |
 |----------|------|------|
-| Y: | Origin (Backup) | 원본 백업 (~1.8TB, 1,568 files) |
-| Z: | Archive (Primary) | 아카이브 (~20TB, 1,405 files) |
-| X: | PokerGO Source | PokerGO 원본 (~684GB, 828 files) |
+| Y: | Origin (Backup) | 원본 백업 (전체 드라이브 스캔) |
+| Z: | Archive (Primary) | 아카이브 (전체 드라이브 스캔) |
+| X: | PokerGO Source | PokerGO 원본 (GGP Footage/POKERGO) |
 
 ## Quick Start
 

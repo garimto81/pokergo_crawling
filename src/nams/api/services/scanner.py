@@ -29,7 +29,7 @@ class FolderType(str, Enum):
 @dataclass
 class ScanConfig:
     """Scan configuration."""
-    origin_path: str = "Y:/WSOP backup"
+    origin_path: str = "Y:/"
     archive_path: str = "Z:/"
     pokergo_path: str = "X:/GGP Footage/POKERGO"  # PokerGO source
     mode: ScanMode = ScanMode.INCREMENTAL

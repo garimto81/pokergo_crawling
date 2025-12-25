@@ -1,7 +1,7 @@
 # NAS Drive Structure
 
-> **Version**: 1.0
-> **Date**: 2025-12-17
+> **Version**: 1.1
+> **Date**: 2025-12-25
 > **Status**: Active
 
 ---
@@ -11,10 +11,10 @@
 | Drive | Path | Role | Videos | Size |
 |-------|------|------|--------|------|
 | **X:** | GGP Footage/POKERGO | PokerGO Source | 247 | ~684 GB |
-| **Y:** | WSOP backup | Origin (Backup) | 371 | ~1.8 TB |
-| **Z:** | Archive | Primary Archive | 1,405 | ~20 TB |
+| **Y:** | / (전체) | Origin (Backup) | TBD | TBD |
+| **Z:** | / (전체) | Primary Archive | 1,405+ | ~20 TB+ |
 
-**Total**: 2,023 video files
+**Note**: Y:, Z: 드라이브는 전체 스캔으로 변경됨 (2025-12-25)
 
 ---
 
@@ -49,11 +49,28 @@ X:/GGP Footage/POKERGO/
 
 ---
 
-## Y: Drive (WSOP Backup / Origin)
+## Y: Drive (Origin / Backup)
 
-**Path**: `Y:\WSOP backup`
+**Path**: `Y:\` (전체 드라이브)
 
-### Folder Structure (26 folders)
+### 주요 폴더 (2025-12-25 기준)
+
+```
+Y:/
+├── WSOP backup/              # 기존 백업 폴더
+├── WSOP 2025/                # 2025 라스베가스
+├── WSOP Paradise 2025/       # 2025 파라다이스
+├── WSOP LV BACK UP/          # LV 백업
+├── 2025 WSOP Europe/         # 2025 유럽
+├── 2025 WSOP Cyprus BackUp/  # 2025 키프로스 백업
+├── 2025 WSOP Super Circuit Cyprus/
+├── WSOP PARADISE 2024/       # 2024 파라다이스
+├── MPP_Tournament/           # MPP 토너먼트
+├── SOFT-CONTENTS_ARCHIVE/    # 소프트 콘텐츠
+└── ... (기타 폴더)
+```
+
+### 레거시 Folder Structure (26 folders)
 
 ```
 Y:/WSOP backup/
@@ -272,4 +289,5 @@ ARCHIVE/WSOP/
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.1 | 2025-12-25 | Y:, Z: 전체 드라이브 스캔으로 변경 |
 | 1.0 | 2025-12-17 | Initial document |

@@ -10,7 +10,7 @@ from collections import defaultdict
 
 # 스캔 대상 드라이브 설정
 SCAN_PATHS = {
-    "origin": Path("Y:/WSOP backup"),      # Origin (Y: 드라이브)
+    "origin": Path("Y:/"),                   # Origin (Y: 드라이브 전체)
     "archive": Path("Z:/"),                 # Archive (Z: 드라이브)
     "pokergo": Path("X:/GGP Footage/POKERGO"),  # PokerGO Source (X: 드라이브)
 }

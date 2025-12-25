@@ -4,6 +4,7 @@ from .models import (
     AssetGroup,
     AuditLog,
     Base,
+    CategoryEntry,
     EventType,
     ExclusionRule,
     NasFile,
@@ -16,6 +17,7 @@ from .session import SessionLocal, engine, get_db, get_db_context
 
 __all__ = [
     "Base",
+    "CategoryEntry",
     "Pattern",
     "Region",
     "EventType",
