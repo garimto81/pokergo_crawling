@@ -520,3 +520,162 @@ class SheetsWriter:
             rows.append(row)
 
         return self.write_rows(sheet_name, rows)
+
+    def write_validation_report(
+        self,
+        all_subclips: list[dict],
+        sheet_name: str = "Subclip_Validation_Report",
+    ) -> int:
+        """Write validation report with checkbox columns for each issue type.
+
+        Args:
+            all_subclips: List of all subclips with issue flags.
+                Each dict has: id, title, original_asset_id, parent_title,
+                time_start_ms, time_end_ms, and issue type flags (TRUE or empty).
+            sheet_name: Target sheet name.
+
+        Returns:
+            Number of rows written.
+        """
+        if not all_subclips:
+            return 0
+
+        # Create sheet if not exists
+        self.create_sheet_if_not_exists(sheet_name)
+
+        # Clear existing data
+        self.clear_sheet(sheet_name)
+
+        # Headers with checkbox columns for each issue type
+        headers = [
+            "id",
+            "title",
+            "original_asset_id",
+            "parent_title",
+            "time_start_ms",
+            "time_end_ms",
+            "orphan_subclip",
+            "missing_parent",
+            "self_reference",
+            "missing_timecode",
+            "round_timecode",
+            "invalid_range",
+        ]
+
+        rows = [headers]
+
+        for subclip in all_subclips:
+            row = [
+                subclip.get("id", ""),
+                subclip.get("title", ""),
+                subclip.get("original_asset_id", ""),
+                subclip.get("parent_title", ""),
+                str(subclip.get("time_start_ms", "")),
+                str(subclip.get("time_end_ms", "")),
+                # Convert "" to FALSE for checkbox columns
+                "TRUE" if subclip.get("orphan_subclip") == "TRUE" else "FALSE",
+                "TRUE" if subclip.get("missing_parent") == "TRUE" else "FALSE",
+                "TRUE" if subclip.get("self_reference") == "TRUE" else "FALSE",
+                "TRUE" if subclip.get("missing_timecode") == "TRUE" else "FALSE",
+                "TRUE" if subclip.get("round_timecode") == "TRUE" else "FALSE",
+                "TRUE" if subclip.get("invalid_range") == "TRUE" else "FALSE",
+            ]
+            rows.append(row)
+
+        # Write with USER_ENTERED so TRUE/FALSE become boolean (for checkboxes)
+        range_str = f"{sheet_name}!A1"
+        self.service.spreadsheets().values().update(
+            spreadsheetId=self.spreadsheet_id,
+            range=range_str,
+            valueInputOption="USER_ENTERED",
+            body={"values": rows},
+        ).execute()
+
+        return len(rows)
+
+    def apply_checkboxes(
+        self,
+        sheet_name: str,
+        checkbox_columns: list[str],
+        start_row: int = 2,
+    ) -> dict:
+        """Apply checkbox data validation to specified columns.
+
+        Uses BOOLEAN condition type so TRUE/FALSE values display as checkboxes.
+
+        Args:
+            sheet_name: Target sheet name.
+            checkbox_columns: List of column letters (e.g., ['G', 'H', 'I']).
+            start_row: Starting row number (1-indexed, default: 2 for header).
+
+        Returns:
+            Dictionary with status and details.
+        """
+        try:
+            # Get sheet info to find sheet ID
+            spreadsheet = self.service.spreadsheets().get(
+                spreadsheetId=self.spreadsheet_id
+            ).execute()
+
+            sheet_id = None
+            data_row_count = None
+
+            for sheet in spreadsheet.get("sheets", []):
+                if sheet["properties"]["title"] == sheet_name:
+                    sheet_id = sheet["properties"]["sheetId"]
+                    # Get row count
+                    data_row_count = sheet["properties"].get("gridProperties", {}).get(
+                        "rowCount", 1000
+                    )
+                    break
+
+            if sheet_id is None:
+                return {
+                    "success": False,
+                    "error": f"Sheet '{sheet_name}' not found",
+                }
+
+            if data_row_count is None:
+                data_row_count = 1000
+
+            # Build checkbox requests for each column
+            requests = []
+            for col in checkbox_columns:
+                col_index = ord(col.upper()) - ord("A")
+
+                requests.append(
+                    {
+                        "setDataValidation": {
+                            "range": {
+                                "sheetId": sheet_id,
+                                "startRowIndex": start_row - 1,  # 0-indexed
+                                "endRowIndex": data_row_count,
+                                "startColumnIndex": col_index,
+                                "endColumnIndex": col_index + 1,
+                            },
+                            "rule": {
+                                "condition": {
+                                    "type": "BOOLEAN",
+                                },
+                                "showCustomUi": True,
+                            },
+                        }
+                    }
+                )
+
+            # Execute batch update
+            if requests:
+                self.service.spreadsheets().batchUpdate(
+                    spreadsheetId=self.spreadsheet_id,
+                    body={"requests": requests},
+                ).execute()
+
+            return {
+                "success": True,
+                "sheet": sheet_name,
+                "columns": checkbox_columns,
+                "rows": f"{start_row}:{data_row_count}",
+            }
+
+        except Exception as e:
+            return {"success": False, "error": str(e)}
